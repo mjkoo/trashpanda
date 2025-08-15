@@ -7,6 +7,7 @@ pub type Result<T> = std::result::Result<T, BanditError>;
 
 /// Errors that can occur during bandit operations.
 #[derive(Error, Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum BanditError {
     /// The specified arm was not found in the bandit.
     #[error("arm not found")]
@@ -24,35 +25,9 @@ pub enum BanditError {
     #[error("dimension mismatch: {message}")]
     DimensionMismatch { message: String },
 
-    /// Invalid parameter value.
-    #[error("invalid parameter: {message}")]
-    InvalidParameter { message: String },
-
-    /// The bandit has not been trained yet.
-    #[error("bandit not trained: no data has been fitted")]
-    NotTrained,
-
-    /// Invalid context dimensions.
-    #[error("invalid context dimensions: expected {expected}, got {got}")]
-    InvalidContextDimensions { expected: usize, got: usize },
-
-    /// Numerical computation error.
-    #[error("numerical error: {message}")]
-    NumericalError { message: String },
-
-    /// IO error occurred during operation.
-    #[error("IO error: {0}")]
-    IoError(String),
-
     /// Builder configuration error.
     #[error("builder error: {message}")]
     BuilderError { message: String },
-}
-
-impl From<std::io::Error> for BanditError {
-    fn from(err: std::io::Error) -> Self {
-        BanditError::IoError(err.to_string())
-    }
 }
 
 #[cfg(test)]
@@ -64,21 +39,17 @@ mod tests {
         let err = BanditError::ArmNotFound;
         assert_eq!(err.to_string(), "arm not found");
 
-        let err = BanditError::InvalidParameter {
-            message: "epsilon must be between 0 and 1".to_string(),
+        let err = BanditError::DimensionMismatch {
+            message: "context dimensions mismatch".to_string(),
         };
         assert_eq!(
             err.to_string(),
-            "invalid parameter: epsilon must be between 0 and 1"
+            "dimension mismatch: context dimensions mismatch"
         );
 
-        let err = BanditError::InvalidContextDimensions {
-            expected: 10,
-            got: 5,
+        let err = BanditError::BuilderError {
+            message: "invalid configuration".to_string(),
         };
-        assert_eq!(
-            err.to_string(),
-            "invalid context dimensions: expected 10, got 5"
-        );
+        assert_eq!(err.to_string(), "builder error: invalid configuration");
     }
 }

@@ -1,8 +1,12 @@
 pub mod epsilon_greedy;
 pub mod random;
+pub mod thompson;
+pub mod ucb;
 
 pub use epsilon_greedy::EpsilonGreedy;
 pub use random::Random;
+pub use thompson::ThompsonSampling;
+pub use ucb::Ucb;
 
 use indexmap::IndexSet;
 use std::collections::HashMap;

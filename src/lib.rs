@@ -54,7 +54,7 @@ pub use indexmap::IndexSet;
 /// use trashpanda::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::policies::{EpsilonGreedy, Policy, Random};
+    pub use crate::policies::{EpsilonGreedy, Policy, Random, ThompsonSampling, Ucb};
     pub use crate::{Bandit, BanditError, Result};
     // IndexSet is available for custom policy implementations
     pub use indexmap::IndexSet;

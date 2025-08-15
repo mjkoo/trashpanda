@@ -49,7 +49,6 @@ where
     P: Policy<A>,
 {
     /// Creates a new bandit with the given arms and policy.
-    #[must_use = "Bandit creation may fail, check the Result"]
     pub fn new<I>(arms: I, policy: P) -> Result<Self>
     where
         I: IntoIterator<Item = A>,
@@ -88,19 +87,16 @@ where
     }
 
     /// Returns a reference to the arms collection.
-    #[must_use = "This returns the arms without modifying the bandit"]
     pub fn arms(&self) -> &IndexSet<A> {
         &self.arms
     }
 
     /// Checks if an arm exists in the bandit.
-    #[must_use = "This returns whether the arm exists without modifying the bandit"]
     pub fn has_arm(&self, arm: &A) -> bool {
         self.arms.contains(arm)
     }
 
     /// Returns a reference to the policy.
-    #[must_use = "This returns the policy without modifying the bandit"]
     pub fn policy(&self) -> &P {
         &self.policy
     }
@@ -229,13 +225,11 @@ where
     /// let choice = bandit.predict().unwrap();
     /// assert!([1, 2, 3].contains(&choice));
     /// ```
-    #[must_use = "The prediction should be used or explicitly ignored"]
     pub fn predict(&self) -> Result<A> {
         self.predict_with_rng(&mut rand::rng())
     }
 
     /// Predicts the best arm to pull using a specific random number generator.
-    #[must_use = "The prediction should be used or explicitly ignored"]
     pub fn predict_with_rng<R: Rng>(&self, rng: &mut R) -> Result<A> {
         self.policy
             .select(&self.arms, rng as &mut dyn rand::RngCore)
@@ -258,7 +252,6 @@ where
     /// bandit.fit(&["a", "b", "c"], &[0.8, 0.5, 0.3]).unwrap();
     /// let expectations = bandit.predict_expectations().unwrap();
     /// ```
-    #[must_use = "The expectations should be used or explicitly ignored"]
     pub fn predict_expectations(&self) -> Result<HashMap<A, f64>> {
         Ok(self.policy.expectations(&self.arms))
     }
@@ -276,7 +269,6 @@ where
     P: Policy<A>,
 {
     /// Creates a new builder.
-    #[must_use = "This returns a builder that should be used to construct a Bandit"]
     pub fn new() -> Self {
         Self {
             arms: None,
@@ -296,7 +288,6 @@ where
     ///     .arms(vec!["a".to_string(), "b".to_string()])
     ///     .policy(Random);
     /// ```
-    #[must_use = "This returns a builder for chaining"]
     pub fn arms<I>(mut self, arms: I) -> Self
     where
         I: IntoIterator<Item = A>,
@@ -317,7 +308,6 @@ where
     ///     .arms(vec![1, 2, 3])
     ///     .policy(EpsilonGreedy::new(0.1));
     /// ```
-    #[must_use = "This returns a builder for chaining"]
     pub fn policy(mut self, policy: P) -> Self {
         self.policy = Some(policy);
         self
@@ -332,7 +322,6 @@ where
     /// - No policy was specified  
     /// - Duplicate arms were provided
     /// - Zero arms were provided
-    #[must_use = "The build result should be checked for errors"]
     pub fn build(self) -> Result<Bandit<A, P>> {
         let arms = self.arms.ok_or_else(|| BanditError::BuilderError {
             message: "arms must be specified".to_string(),
@@ -376,7 +365,6 @@ where
     ///     .build()
     ///     .unwrap();
     /// ```
-    #[must_use = "This returns a builder that should be used to construct a Bandit"]
     pub fn builder() -> BanditBuilder<A, P> {
         BanditBuilder::new()
     }
