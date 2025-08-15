@@ -1,5 +1,6 @@
 use super::Policy;
-use rand::prelude::*;
+use indexmap::IndexSet;
+use rand::Rng;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -15,11 +16,17 @@ where
         // Random policy doesn't learn from feedback
     }
 
-    fn select(&self, arms: &[A], rng: &mut dyn rand::RngCore) -> Option<A> {
-        arms.choose(rng).cloned()
+    fn select(&self, arms: &IndexSet<A>, rng: &mut dyn rand::RngCore) -> Option<A> {
+        if arms.is_empty() {
+            return None;
+        }
+
+        // Generate random index directly
+        let idx = rng.random_range(0..arms.len());
+        arms.get_index(idx).cloned()
     }
 
-    fn expectations(&self, arms: &[A]) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>) -> HashMap<A, f64> {
         if arms.is_empty() {
             return HashMap::new();
         }
@@ -45,7 +52,10 @@ mod tests {
     #[test]
     fn test_random_select() {
         let policy = Random;
-        let arms = vec!["a", "b", "c"];
+        let mut arms = IndexSet::new();
+        arms.insert("a");
+        arms.insert("b");
+        arms.insert("c");
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         let choice = Policy::select(&policy, &arms, &mut rng as &mut dyn rand::RngCore).unwrap();
@@ -55,7 +65,10 @@ mod tests {
     #[test]
     fn test_random_expectations() {
         let policy = Random;
-        let arms = vec![1, 2, 3];
+        let mut arms = IndexSet::new();
+        arms.insert(1);
+        arms.insert(2);
+        arms.insert(3);
         let expectations = policy.expectations(&arms);
 
         assert_eq!(expectations.len(), 3);
@@ -67,7 +80,7 @@ mod tests {
     #[test]
     fn test_random_empty() {
         let policy = Random;
-        let arms: Vec<i32> = vec![];
+        let arms: IndexSet<i32> = IndexSet::new();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         assert_eq!(

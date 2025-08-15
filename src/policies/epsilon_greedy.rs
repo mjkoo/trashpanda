@@ -1,5 +1,6 @@
 use super::Policy;
-use rand::prelude::*;
+use indexmap::IndexSet;
+use rand::Rng;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -89,24 +90,24 @@ where
         }
     }
 
-    fn select(&self, arms: &[A], rng: &mut dyn rand::RngCore) -> Option<A> {
-        use rand::Rng;
-
+    fn select(&self, arms: &IndexSet<A>, rng: &mut dyn rand::RngCore) -> Option<A> {
         if arms.is_empty() {
             return None;
         }
 
         // Explore with probability epsilon
-        if rng.random::<f64>() < self.epsilon {
+        let r: f64 = rng.random();
+        if r < self.epsilon {
             // Random selection (exploration)
-            arms.choose(rng).cloned()
+            let idx = rng.random_range(0..arms.len());
+            arms.get_index(idx).cloned()
         } else {
             // Select arm with highest average reward (exploitation)
             self.find_best_arm(arms)
         }
     }
 
-    fn expectations(&self, arms: &[A]) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>) -> HashMap<A, f64> {
         if arms.is_empty() {
             return HashMap::new();
         }
@@ -146,7 +147,7 @@ where
     A: Clone + Eq + Hash,
 {
     /// Find the arm with highest average reward
-    fn find_best_arm(&self, arms: &[A]) -> Option<A> {
+    fn find_best_arm(&self, arms: &IndexSet<A>) -> Option<A> {
         arms.iter()
             .max_by(|a, b| {
                 let reward_a = self.arm_stats.get(*a).map_or(0.0, |s| s.average_reward());
@@ -167,7 +168,10 @@ mod tests {
     #[test]
     fn test_epsilon_greedy_pure_exploration() {
         let policy = EpsilonGreedy::new(1.0);
-        let arms = vec!["a", "b", "c"];
+        let mut arms = IndexSet::new();
+        arms.insert("a");
+        arms.insert("b");
+        arms.insert("c");
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should return one of the arms randomly
@@ -184,7 +188,10 @@ mod tests {
     #[test]
     fn test_epsilon_greedy_pure_exploitation() {
         let mut policy = EpsilonGreedy::new(0.0);
-        let arms = vec![1, 2, 3];
+        let mut arms = IndexSet::new();
+        arms.insert(1);
+        arms.insert(2);
+        arms.insert(3);
 
         // Train with some data - arm 2 has highest average
         policy.update(&[1, 2, 3, 2], &[0.5, 1.0, 0.3, 0.8]);
@@ -208,7 +215,10 @@ mod tests {
     #[test]
     fn test_epsilon_greedy_mixed() {
         let mut policy = EpsilonGreedy::new(0.3);
-        let arms = vec!["x", "y", "z"];
+        let mut arms = IndexSet::new();
+        arms.insert("x");
+        arms.insert("y");
+        arms.insert("z");
 
         // Train with some data - "y" has highest average
         policy.update(&["x", "y", "z", "y"], &[0.4, 0.9, 0.2, 0.8]);
@@ -234,7 +244,10 @@ mod tests {
         policy.reset_arm(&2);
 
         // Arm 2 should now have default stats (0.0 average)
-        let arms = vec![1, 2, 3];
+        let mut arms = IndexSet::new();
+        arms.insert(1);
+        arms.insert(2);
+        arms.insert(3);
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // With epsilon=0.5 and arm 1 being best, it should be selected often

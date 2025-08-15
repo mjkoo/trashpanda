@@ -6,7 +6,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, BanditError>;
 
 /// Errors that can occur during bandit operations.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum BanditError {
     /// The specified arm was not found in the bandit.
     #[error("arm not found")]
@@ -40,9 +40,19 @@ pub enum BanditError {
     #[error("numerical error: {message}")]
     NumericalError { message: String },
 
+    /// IO error occurred during operation.
+    #[error("IO error: {0}")]
+    IoError(String),
+
     /// Builder configuration error.
     #[error("builder error: {message}")]
     BuilderError { message: String },
+}
+
+impl From<std::io::Error> for BanditError {
+    fn from(err: std::io::Error) -> Self {
+        BanditError::IoError(err.to_string())
+    }
 }
 
 #[cfg(test)]

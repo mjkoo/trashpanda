@@ -43,6 +43,9 @@ pub mod policies;
 pub use bandit::{ArmMetadata, Bandit, BanditBuilder};
 pub use error::{BanditError, Result};
 
+// Re-export IndexSet for users implementing custom policies
+pub use indexmap::IndexSet;
+
 /// Prelude module for convenient imports.
 ///
 /// # Examples
@@ -53,4 +56,6 @@ pub use error::{BanditError, Result};
 pub mod prelude {
     pub use crate::policies::{EpsilonGreedy, Policy, Random};
     pub use crate::{Bandit, BanditError, Result};
+    // IndexSet is available for custom policy implementations
+    pub use indexmap::IndexSet;
 }
