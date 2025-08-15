@@ -1,15 +1,12 @@
 use rand::SeedableRng;
 use std::collections::HashMap;
-use trashpanda::{Bandit, LearningPolicy};
+use trashpanda::Bandit;
+use trashpanda::policies::EpsilonGreedy;
 
 #[test]
 fn test_epsilon_greedy_pure_exploitation() {
     // With epsilon = 0, should always choose the best arm
-    let mut bandit = Bandit::builder()
-        .arms(vec!["a", "b", "c"])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.0 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec!["a", "b", "c"], EpsilonGreedy::new(0.0)).unwrap();
 
     // Train with data where "b" is clearly the best
     bandit
@@ -27,11 +24,7 @@ fn test_epsilon_greedy_pure_exploitation() {
 #[test]
 fn test_epsilon_greedy_pure_exploration() {
     // With epsilon = 1.0, should behave like random policy
-    let mut bandit = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 1.0 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(1.0)).unwrap();
 
     // Train with data
     bandit.fit(&[1, 2, 3, 2], &[0.1, 1.0, 0.2, 0.9]).unwrap();
@@ -46,11 +39,7 @@ fn test_epsilon_greedy_pure_exploration() {
 #[test]
 fn test_epsilon_greedy_mixed_strategy() {
     // With epsilon = 0.2, should explore 20% and exploit 80%
-    let mut bandit = Bandit::builder()
-        .arms(vec!["red", "green", "blue"])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.2 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec!["red", "green", "blue"], EpsilonGreedy::new(0.2)).unwrap();
 
     // Train with data where "green" is best
     bandit
@@ -73,11 +62,7 @@ fn test_epsilon_greedy_mixed_strategy() {
 #[test]
 fn test_epsilon_greedy_learning() {
     // Test that the policy learns and adapts
-    let mut bandit = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.1)).unwrap();
 
     // Initially all arms are equal
     let initial_exp = bandit.predict_expectations().unwrap();
@@ -98,11 +83,7 @@ fn test_epsilon_greedy_learning() {
 #[test]
 fn test_epsilon_greedy_incremental_learning() {
     // Test partial_fit
-    let mut bandit = Bandit::builder()
-        .arms(vec!["x", "y", "z"])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.0 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec!["x", "y", "z"], EpsilonGreedy::new(0.0)).unwrap();
 
     // Incrementally train
     bandit.partial_fit(&["x"], &[0.5]).unwrap();
@@ -118,11 +99,7 @@ fn test_epsilon_greedy_incremental_learning() {
 
 #[test]
 fn test_epsilon_greedy_dynamic_arms() {
-    let mut bandit = Bandit::builder()
-        .arms(vec![1, 2])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.3 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec![1, 2], EpsilonGreedy::new(0.3)).unwrap();
 
     // Train initial arms
     bandit.fit(&[1, 2, 1], &[0.6, 0.4, 0.7]).unwrap();
@@ -147,11 +124,7 @@ fn test_epsilon_greedy_dynamic_arms() {
 #[test]
 fn test_epsilon_greedy_distribution() {
     // Statistical test of epsilon-greedy behavior
-    let mut bandit = Bandit::builder()
-        .arms(vec!["a", "b", "c"])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.3 })
-        .build::<trashpanda::policies::EpsilonGreedy<_>>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec!["a", "b", "c"], EpsilonGreedy::new(0.3)).unwrap();
 
     // Train so "b" is clearly best
     bandit.fit(&["a", "b", "c"], &[0.2, 0.9, 0.1]).unwrap();

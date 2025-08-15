@@ -1,14 +1,11 @@
 use rand::SeedableRng;
 use std::collections::HashMap;
-use trashpanda::{Bandit, LearningPolicy};
+use trashpanda::Bandit;
+use trashpanda::policies::Random;
 
 #[test]
 fn test_random_policy_basic() {
-    let bandit = Bandit::builder()
-        .arms(vec!["a", "b", "c"])
-        .policy(LearningPolicy::Random)
-        .build::<trashpanda::policies::Random>()
-        .unwrap();
+    let bandit = Bandit::new(vec!["a", "b", "c"], Random).unwrap();
 
     // Should be able to predict
     let choice = bandit.predict().unwrap();
@@ -17,11 +14,7 @@ fn test_random_policy_basic() {
 
 #[test]
 fn test_random_policy_expectations() {
-    let bandit = Bandit::builder()
-        .arms(vec![1, 2, 3, 4])
-        .policy(LearningPolicy::Random)
-        .build::<trashpanda::policies::Random>()
-        .unwrap();
+    let bandit = Bandit::new(vec![1, 2, 3, 4], Random).unwrap();
 
     let expectations = bandit.predict_expectations().unwrap();
 
@@ -34,11 +27,7 @@ fn test_random_policy_expectations() {
 
 #[test]
 fn test_random_policy_distribution() {
-    let bandit = Bandit::builder()
-        .arms(vec!["red", "green", "blue"])
-        .policy(LearningPolicy::Random)
-        .build::<trashpanda::policies::Random>()
-        .unwrap();
+    let bandit = Bandit::new(vec!["red", "green", "blue"], Random).unwrap();
 
     // Make many predictions and check distribution
     let mut counts = HashMap::new();
@@ -59,11 +48,7 @@ fn test_random_policy_distribution() {
 
 #[test]
 fn test_random_policy_with_training() {
-    let mut bandit = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::Random)
-        .build::<trashpanda::policies::Random>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
 
     // Train with some data
     let decisions = vec![1, 2, 1, 3, 2];
@@ -79,11 +64,7 @@ fn test_random_policy_with_training() {
 
 #[test]
 fn test_random_policy_partial_fit() {
-    let mut bandit = Bandit::builder()
-        .arms(vec!["x", "y", "z"])
-        .policy(LearningPolicy::Random)
-        .build::<trashpanda::policies::Random>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec!["x", "y", "z"], Random).unwrap();
 
     // Partial fit with some data
     bandit.partial_fit(&["x"], &[1.0]).unwrap();
@@ -96,11 +77,7 @@ fn test_random_policy_partial_fit() {
 
 #[test]
 fn test_random_policy_dynamic_arms() {
-    let mut bandit = Bandit::builder()
-        .arms(vec![1, 2])
-        .policy(LearningPolicy::Random)
-        .build::<trashpanda::policies::Random>()
-        .unwrap();
+    let mut bandit = Bandit::new(vec![1, 2], Random).unwrap();
 
     // Initial expectations
     let expectations = bandit.predict_expectations().unwrap();

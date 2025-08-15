@@ -7,11 +7,11 @@ use trashpanda::prelude::*;
 fn test_basic_bandit_creation() {
     let bandit = Bandit::builder()
         .arms(vec!["option_a", "option_b", "option_c"])
-        .policy(LearningPolicy::Random)
-        .build::<Random>()
+        .policy(Random)
+        .build()
         .unwrap();
 
-    assert_eq!(bandit.n_arms(), 3);
+    assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&"option_a"));
     assert!(bandit.has_arm(&"option_b"));
     assert!(bandit.has_arm(&"option_c"));
@@ -21,11 +21,11 @@ fn test_basic_bandit_creation() {
 fn test_integer_arms() {
     let bandit = Bandit::builder()
         .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.15 })
-        .build::<EpsilonGreedy<_>>()
+        .policy(EpsilonGreedy::new(0.15))
+        .build()
         .unwrap();
 
-    assert_eq!(bandit.n_arms(), 3);
+    assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&1));
     assert!(bandit.has_arm(&2));
     assert!(bandit.has_arm(&3));
@@ -35,11 +35,11 @@ fn test_integer_arms() {
 fn test_string_arms() {
     let bandit = Bandit::builder()
         .arms(vec!["red", "green", "blue"])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.15 })
-        .build::<EpsilonGreedy<_>>()
+        .policy(EpsilonGreedy::new(0.15))
+        .build()
         .unwrap();
 
-    assert_eq!(bandit.n_arms(), 3);
+    assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&"red"));
     assert!(bandit.has_arm(&"green"));
     assert!(bandit.has_arm(&"blue"));
@@ -49,21 +49,21 @@ fn test_string_arms() {
 fn test_dynamic_arm_management() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2])
-        .policy(LearningPolicy::Random)
-        .build::<Random>()
+        .policy(Random)
+        .build()
         .unwrap();
 
     // Start with 2 arms
-    assert_eq!(bandit.n_arms(), 2);
+    assert_eq!(bandit.arms().len(), 2);
 
     // Add a new arm
     bandit.add_arm(3).unwrap();
-    assert_eq!(bandit.n_arms(), 3);
+    assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&3));
 
     // Remove an arm
     bandit.remove_arm(&2).unwrap();
-    assert_eq!(bandit.n_arms(), 2);
+    assert_eq!(bandit.arms().len(), 2);
     assert!(!bandit.has_arm(&2));
 
     // Verify remaining arms
@@ -74,40 +74,27 @@ fn test_dynamic_arm_management() {
 #[test]
 fn test_policy_validation() {
     // Valid epsilon
-    let result = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.5 })
-        .build::<EpsilonGreedy<_>>();
+    let result = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.5));
     assert!(result.is_ok());
 
-    // Invalid epsilon (too high)
-    let result = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: 1.5 })
-        .build::<EpsilonGreedy<_>>();
-    assert!(matches!(result, Err(BanditError::InvalidParameter { .. })));
-
-    // Invalid epsilon (negative)
-    let result = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(LearningPolicy::EpsilonGreedy { epsilon: -0.1 })
-        .build::<EpsilonGreedy<_>>();
-    assert!(matches!(result, Err(BanditError::InvalidParameter { .. })));
+    // Note: Invalid epsilon values are now caught at policy construction time
+    // by the assert! in EpsilonGreedy::new, not at bandit build time
 }
 
 #[test]
 fn test_direct_construction() {
-    // Test with convenience constructors
-    let bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.1).unwrap();
-    assert_eq!(bandit.n_arms(), 3);
+    // Test direct construction with policies
+    let bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.1)).unwrap();
+    assert_eq!(bandit.arms().len(), 3);
 
-    let bandit = Bandit::random(vec!["a", "b", "c"]).unwrap();
-    assert_eq!(bandit.n_arms(), 3);
+    let bandit = Bandit::new(vec!["a", "b", "c"], Random).unwrap();
+    assert_eq!(bandit.arms().len(), 3);
 
-    // Test direct new
-    let bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
-    assert_eq!(bandit.n_arms(), 3);
-
-    let bandit = Bandit::new(vec!["x", "y"], EpsilonGreedy::new(0.2)).unwrap();
-    assert_eq!(bandit.n_arms(), 2);
+    // Test with builder
+    let bandit = Bandit::builder()
+        .arms(vec!["x", "y"])
+        .policy(EpsilonGreedy::new(0.2))
+        .build()
+        .unwrap();
+    assert_eq!(bandit.arms().len(), 2);
 }

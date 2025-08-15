@@ -7,14 +7,20 @@
 //! # Quick Start
 //!
 //! ```
-//! use trashpanda::{Bandit, LearningPolicy};
+//! use trashpanda::Bandit;
 //! use trashpanda::policies::EpsilonGreedy;
 //!
-//! // Create a bandit with three arms
+//! // Create a bandit with three arms using direct construction
+//! let mut bandit = Bandit::new(
+//!     vec!["red", "blue", "green"],
+//!     EpsilonGreedy::new(0.1)
+//! ).unwrap();
+//!
+//! // Or use the builder pattern
 //! let mut bandit = Bandit::builder()
 //!     .arms(vec!["red", "blue", "green"])
-//!     .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-//!     .build::<EpsilonGreedy<_>>()
+//!     .policy(EpsilonGreedy::new(0.1))
+//!     .build()
 //!     .unwrap();
 //!
 //! // Train on historical data
@@ -34,7 +40,7 @@ mod error;
 pub mod policies;
 
 // Re-export main types
-pub use bandit::{ArmMetadata, Bandit, BanditBuilder, BuildablePolicy, LearningPolicy};
+pub use bandit::{ArmMetadata, Bandit, BanditBuilder};
 pub use error::{BanditError, Result};
 
 /// Prelude module for convenient imports.
@@ -45,5 +51,6 @@ pub use error::{BanditError, Result};
 /// use trashpanda::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{Bandit, BanditError, LearningPolicy, Result};
+    pub use crate::policies::{EpsilonGreedy, Policy, Random};
+    pub use crate::{Bandit, BanditError, Result};
 }

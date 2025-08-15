@@ -1,22 +1,9 @@
-use crate::policies::{EpsilonGreedy, Policy, Random};
+use crate::policies::Policy;
 use crate::{BanditError, Result};
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
-
-/// Learning policy configuration.
-#[derive(Clone, Debug)]
-pub enum LearningPolicy {
-    /// Epsilon-greedy policy with specified exploration rate.
-    EpsilonGreedy { epsilon: f64 },
-    /// Upper Confidence Bound with specified confidence parameter.
-    Ucb { alpha: f64 },
-    /// Thompson Sampling for binary rewards.
-    ThompsonSampling,
-    /// Random selection baseline.
-    Random,
-}
 
 /// Metadata associated with each arm.
 #[derive(Clone, Debug, Default)]
@@ -51,7 +38,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Bandit")
             .field("arms", &self.arms)
-            .field("n_arms", &self.n_arms())
+            .field("n_arms", &self.arms().len())
             .field("policy", &self.policy)
             .finish()
     }
@@ -102,11 +89,6 @@ where
         &self.arms
     }
 
-    /// Returns the number of arms.
-    pub fn n_arms(&self) -> usize {
-        self.arms.len()
-    }
-
     /// Checks if an arm exists in the bandit.
     pub fn has_arm(&self, arm: &A) -> bool {
         self.arm_set.contains(arm)
@@ -132,7 +114,7 @@ where
     ///
     /// let mut bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
     /// bandit.add_arm(4).unwrap();
-    /// assert_eq!(bandit.n_arms(), 4);
+    /// assert_eq!(bandit.arms().len(), 4);
     /// ```
     pub fn add_arm(&mut self, arm: A) -> Result<()> {
         if self.has_arm(&arm) {
@@ -160,7 +142,7 @@ where
     ///
     /// let mut bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
     /// bandit.remove_arm(&2).unwrap();
-    /// assert_eq!(bandit.n_arms(), 2);
+    /// assert_eq!(bandit.arms().len(), 2);
     /// ```
     pub fn remove_arm(&mut self, arm: &A) -> Result<()> {
         if !self.has_arm(arm) {
@@ -276,47 +258,16 @@ where
     }
 }
 
-// Convenience builder for the common use case with LearningPolicy enum
-impl<A> Bandit<A, EpsilonGreedy<A>>
-where
-    A: Clone + Eq + Hash,
-{
-    /// Creates a new epsilon-greedy bandit.
-    pub fn epsilon_greedy<I>(arms: I, epsilon: f64) -> Result<Self>
-    where
-        I: IntoIterator<Item = A>,
-    {
-        if !(0.0..=1.0).contains(&epsilon) {
-            return Err(BanditError::InvalidParameter {
-                message: format!("epsilon must be between 0 and 1, got {}", epsilon),
-            });
-        }
-        Self::new(arms, EpsilonGreedy::new(epsilon))
-    }
-}
-
-impl<A> Bandit<A, Random>
-where
-    A: Clone + Eq + Hash,
-{
-    /// Creates a new random selection bandit.
-    pub fn random<I>(arms: I) -> Result<Self>
-    where
-        I: IntoIterator<Item = A>,
-    {
-        Self::new(arms, Random)
-    }
-}
-
-/// Builder for constructing a Bandit instance with the legacy API.
-pub struct BanditBuilder<A> {
+/// Builder for constructing a Bandit instance.
+pub struct BanditBuilder<A, P> {
     arms: Option<Vec<A>>,
-    policy: Option<LearningPolicy>,
+    policy: Option<P>,
 }
 
-impl<A> BanditBuilder<A>
+impl<A, P> BanditBuilder<A, P>
 where
     A: Clone + Eq + Hash,
+    P: Policy<A>,
 {
     /// Creates a new builder.
     pub fn new() -> Self {
@@ -331,10 +282,12 @@ where
     /// # Examples
     ///
     /// ```
-    /// use trashpanda::{Bandit, LearningPolicy};
+    /// use trashpanda::Bandit;
+    /// use trashpanda::policies::Random;
     ///
-    /// let builder = Bandit::<String, ()>::builder()
-    ///     .arms(vec!["a".to_string(), "b".to_string()]);
+    /// let builder = Bandit::builder()
+    ///     .arms(vec!["a".to_string(), "b".to_string()])
+    ///     .policy(Random);
     /// ```
     pub fn arms<I>(mut self, arms: I) -> Self
     where
@@ -349,12 +302,14 @@ where
     /// # Examples
     ///
     /// ```
-    /// use trashpanda::{Bandit, LearningPolicy};
+    /// use trashpanda::Bandit;
+    /// use trashpanda::policies::EpsilonGreedy;
     ///
-    /// let builder = Bandit::<i32, ()>::builder()
-    ///     .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 });
+    /// let builder = Bandit::builder()
+    ///     .arms(vec![1, 2, 3])
+    ///     .policy(EpsilonGreedy::new(0.1));
     /// ```
-    pub fn policy(mut self, policy: LearningPolicy) -> Self {
+    pub fn policy(mut self, policy: P) -> Self {
         self.policy = Some(policy);
         self
     }
@@ -368,91 +323,50 @@ where
     /// - No policy was specified  
     /// - Duplicate arms were provided
     /// - Zero arms were provided
-    /// - Invalid policy parameters
-    pub fn build<P>(self) -> Result<Bandit<A, P>>
-    where
-        P: BuildablePolicy<A>,
-    {
+    pub fn build(self) -> Result<Bandit<A, P>> {
         let arms = self.arms.ok_or_else(|| BanditError::BuilderError {
             message: "arms must be specified".to_string(),
         })?;
 
-        let policy_type = self.policy.ok_or_else(|| BanditError::BuilderError {
+        let policy = self.policy.ok_or_else(|| BanditError::BuilderError {
             message: "policy must be specified".to_string(),
         })?;
 
-        P::build_from_config(arms, policy_type)
+        Bandit::new(arms, policy)
     }
 }
 
-impl<A> Default for BanditBuilder<A>
+impl<A, P> Default for BanditBuilder<A, P>
 where
     A: Clone + Eq + Hash,
+    P: Policy<A>,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-// Helper trait for building policies from LearningPolicy enum
-pub trait BuildablePolicy<A>: Policy<A> + Sized {
-    fn build_from_config(arms: Vec<A>, config: LearningPolicy) -> Result<Bandit<A, Self>>;
-}
-
-impl<A> BuildablePolicy<A> for EpsilonGreedy<A>
+// Convenience method for starting the builder
+impl<A, P> Bandit<A, P>
 where
     A: Clone + Eq + Hash,
-{
-    fn build_from_config(arms: Vec<A>, config: LearningPolicy) -> Result<Bandit<A, Self>> {
-        match config {
-            LearningPolicy::EpsilonGreedy { epsilon } => {
-                if !(0.0..=1.0).contains(&epsilon) {
-                    return Err(BanditError::InvalidParameter {
-                        message: format!("epsilon must be between 0 and 1, got {}", epsilon),
-                    });
-                }
-                Bandit::new(arms, EpsilonGreedy::new(epsilon))
-            }
-            _ => Err(BanditError::BuilderError {
-                message: "policy type mismatch".to_string(),
-            }),
-        }
-    }
-}
-
-impl<A> BuildablePolicy<A> for Random
-where
-    A: Clone + Eq + Hash,
-{
-    fn build_from_config(arms: Vec<A>, config: LearningPolicy) -> Result<Bandit<A, Self>> {
-        match config {
-            LearningPolicy::Random => Bandit::new(arms, Random),
-            _ => Err(BanditError::BuilderError {
-                message: "policy type mismatch".to_string(),
-            }),
-        }
-    }
-}
-
-// Convenience method for builder on Bandit when no policy type is specified
-impl<A> Bandit<A, ()>
-where
-    A: Clone + Eq + Hash,
+    P: Policy<A>,
 {
     /// Creates a new bandit builder.
     ///
     /// # Examples
     ///
     /// ```
-    /// use trashpanda::{Bandit, LearningPolicy};
+    /// use trashpanda::Bandit;
+    /// use trashpanda::policies::EpsilonGreedy;
     ///
     /// let bandit = Bandit::builder()
     ///     .arms(vec![1, 2, 3])
-    ///     .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-    ///     .build::<trashpanda::policies::EpsilonGreedy<_>>()
+    ///     .policy(EpsilonGreedy::new(0.1))
+    ///     .build()
     ///     .unwrap();
     /// ```
-    pub fn builder() -> BanditBuilder<A> {
+    pub fn builder() -> BanditBuilder<A, P> {
         BanditBuilder::new()
     }
 }
@@ -460,96 +374,70 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::policies::{EpsilonGreedy, Random};
 
     #[test]
     fn test_direct_construction() {
         // Test with EpsilonGreedy
         let bandit = Bandit::new(vec!["a", "b", "c"], EpsilonGreedy::new(0.1)).unwrap();
-        assert_eq!(bandit.n_arms(), 3);
+        assert_eq!(bandit.arms().len(), 3);
 
         // Test with Random
         let bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
-        assert_eq!(bandit.n_arms(), 3);
+        assert_eq!(bandit.arms().len(), 3);
     }
 
     #[test]
-    fn test_convenience_constructors() {
-        // Test epsilon_greedy constructor
-        let bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.1).unwrap();
-        assert_eq!(bandit.n_arms(), 3);
-
-        // Test random constructor
-        let bandit = Bandit::random(vec!["a", "b", "c"]).unwrap();
-        assert_eq!(bandit.n_arms(), 3);
-
-        // Test invalid epsilon
-        let result = Bandit::epsilon_greedy(vec![1, 2, 3], 1.5);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_builder_with_explicit_type() {
+    fn test_builder_with_policies() {
+        // Test builder with EpsilonGreedy
         let bandit = Bandit::builder()
             .arms(vec![1, 2, 3])
-            .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-            .build::<EpsilonGreedy<_>>()
+            .policy(EpsilonGreedy::new(0.1))
+            .build()
             .unwrap();
+        assert_eq!(bandit.arms().len(), 3);
 
-        assert_eq!(bandit.n_arms(), 3);
-    }
-
-    #[test]
-    fn test_builder_with_random() {
+        // Test builder with Random
         let bandit = Bandit::builder()
             .arms(vec!["a", "b", "c"])
-            .policy(LearningPolicy::Random)
-            .build::<Random>()
+            .policy(Random)
+            .build()
             .unwrap();
-
-        assert_eq!(bandit.n_arms(), 3);
+        assert_eq!(bandit.arms().len(), 3);
     }
 
     #[test]
     fn test_builder_errors() {
-        // No arms
-        let result = Bandit::<i32, ()>::builder()
-            .policy(LearningPolicy::Random)
-            .build::<Random>();
-        assert!(result.is_err());
+        // No arms - need to provide both type parameters for partial construction
+        let builder = BanditBuilder::<i32, Random>::new().policy(Random);
+        assert!(builder.build().is_err());
 
         // No policy
-        let result = Bandit::builder().arms(vec![1, 2, 3]).build::<Random>();
-        assert!(result.is_err());
+        let builder = BanditBuilder::<i32, Random>::new().arms(vec![1, 2, 3]);
+        assert!(builder.build().is_err());
 
         // Empty arms
-        let result = Bandit::<i32, ()>::builder()
-            .arms(vec![])
-            .policy(LearningPolicy::Random)
-            .build::<Random>();
+        let result = Bandit::builder()
+            .arms(vec![] as Vec<i32>)
+            .policy(Random)
+            .build();
         assert!(result.is_err());
 
         // Duplicate arms
         let result = Bandit::builder()
             .arms(vec![1, 2, 2, 3])
-            .policy(LearningPolicy::Random)
-            .build::<Random>();
-        assert!(result.is_err());
-
-        // Invalid epsilon
-        let result = Bandit::builder()
-            .arms(vec![1, 2, 3])
-            .policy(LearningPolicy::EpsilonGreedy { epsilon: -0.1 })
-            .build::<EpsilonGreedy<_>>();
+            .policy(Random)
+            .build();
         assert!(result.is_err());
     }
 
     #[test]
     fn test_add_remove_arms() {
-        let mut bandit = Bandit::random(vec![1, 2, 3]).unwrap();
+        let mut bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
 
         // Add new arm
         assert!(bandit.add_arm(4).is_ok());
-        assert_eq!(bandit.n_arms(), 4);
+        assert_eq!(bandit.arms().len(), 4);
         assert!(bandit.has_arm(&4));
 
         // Try to add duplicate
@@ -557,7 +445,7 @@ mod tests {
 
         // Remove arm
         assert!(bandit.remove_arm(&2).is_ok());
-        assert_eq!(bandit.n_arms(), 3);
+        assert_eq!(bandit.arms().len(), 3);
         assert!(!bandit.has_arm(&2));
 
         // Try to remove non-existent
@@ -566,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_fit_validates_arms() {
-        let mut bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.1).unwrap();
+        let mut bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.1)).unwrap();
 
         // Valid decisions
         assert!(bandit.fit(&[1, 2, 3], &[0.5, 0.8, 0.3]).is_ok());
@@ -580,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_policy_access() {
-        let mut bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.5).unwrap();
+        let mut bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.5)).unwrap();
 
         // Access policy
         assert_eq!(bandit.policy().epsilon(), 0.5);
