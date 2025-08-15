@@ -1,0 +1,6 @@
+pre-commit:
+  parallel: true
+  commands:
+    rust:
+      glob: "*.rs"
+      run: cargo fmt --check && cargo clippy -- -D warnings

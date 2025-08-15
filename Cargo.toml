@@ -2,5 +2,23 @@
 name = "trashpanda"
 version = "0.1.0"
 edition = "2024"
+description = "A Rust library for contextual multi-armed bandits"
+repository = "https://github.com/mjkoo/trashpanda"
+license = "Apache-2.0 OR MIT"
+keywords = [
+    "bandit",
+    "reinforcement-learning",
+    "machine-learning",
+    "optimization",
+]
+categories = ["algorithms", "science"]
 
 [dependencies]
+thiserror = "1.0"
+ordered-float = "4.2"
+rand = "0.8"
+rand_distr = "0.4"
+
+[dev-dependencies]
+approx = "0.5"
+proptest = "1.4"
