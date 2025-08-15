@@ -10,18 +10,17 @@
 //! use trashpanda::Bandit;
 //! use trashpanda::policies::EpsilonGreedy;
 //!
-//! // Create a bandit with three arms using direct construction
+//! // Create a bandit with three arms directly
 //! let mut bandit = Bandit::new(
 //!     vec!["red", "blue", "green"],
 //!     EpsilonGreedy::new(0.1)
 //! ).unwrap();
 //!
-//! // Or use the builder pattern
-//! let mut bandit = Bandit::builder()
-//!     .arms(vec!["red", "blue", "green"])
-//!     .policy(EpsilonGreedy::new(0.1))
-//!     .build()
-//!     .unwrap();
+//! // Or use convenience constructor
+//! let mut bandit = Bandit::epsilon_greedy(
+//!     vec!["red", "blue", "green"],
+//!     0.1
+//! ).unwrap();
 //!
 //! // Train on historical data
 //! let decisions = vec!["red", "blue", "red"];
@@ -29,7 +28,8 @@
 //! // bandit.fit(&decisions, &rewards).unwrap();
 //!
 //! // Make a prediction
-//! // let choice = bandit.predict().unwrap();
+//! // let mut rng = rand::thread_rng();
+//! // let choice = bandit.predict(&mut rng).unwrap();
 //! ```
 
 // #![warn(missing_docs)]
@@ -38,10 +38,11 @@
 mod bandit;
 mod error;
 pub mod policies;
+mod ridge;
 
 // Re-export main types
-pub use bandit::{ArmMetadata, Bandit, BanditBuilder};
-pub use error::{BanditError, Result};
+pub use bandit::Bandit;
+pub use error::{BanditError, PolicyError, PolicyResult, Result};
 
 // Re-export IndexSet for users implementing custom policies
 pub use indexmap::IndexSet;
@@ -54,7 +55,7 @@ pub use indexmap::IndexSet;
 /// use trashpanda::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::policies::{EpsilonGreedy, Policy, Random, ThompsonSampling, Ucb};
+    pub use crate::policies::{EpsilonGreedy, LinUcb, Policy, Random, ThompsonSampling, Ucb};
     pub use crate::{Bandit, BanditError, Result};
     // IndexSet is available for custom policy implementations
     pub use indexmap::IndexSet;

@@ -5,11 +5,7 @@ use trashpanda::prelude::*;
 
 #[test]
 fn test_basic_bandit_creation() {
-    let bandit = Bandit::builder()
-        .arms(vec!["option_a", "option_b", "option_c"])
-        .policy(Random)
-        .build()
-        .unwrap();
+    let bandit = Bandit::new(vec!["option_a", "option_b", "option_c"], Random).unwrap();
 
     assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&"option_a"));
@@ -19,11 +15,7 @@ fn test_basic_bandit_creation() {
 
 #[test]
 fn test_integer_arms() {
-    let bandit = Bandit::builder()
-        .arms(vec![1, 2, 3])
-        .policy(EpsilonGreedy::new(0.15))
-        .build()
-        .unwrap();
+    let bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.15)).unwrap();
 
     assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&1));
@@ -33,11 +25,7 @@ fn test_integer_arms() {
 
 #[test]
 fn test_string_arms() {
-    let bandit = Bandit::builder()
-        .arms(vec!["red", "green", "blue"])
-        .policy(EpsilonGreedy::new(0.15))
-        .build()
-        .unwrap();
+    let bandit = Bandit::new(vec!["red", "green", "blue"], EpsilonGreedy::new(0.15)).unwrap();
 
     assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&"red"));
@@ -47,11 +35,7 @@ fn test_string_arms() {
 
 #[test]
 fn test_dynamic_arm_management() {
-    let mut bandit = Bandit::builder()
-        .arms(vec![1, 2])
-        .policy(Random)
-        .build()
-        .unwrap();
+    let mut bandit = Bandit::new(vec![1, 2], Random).unwrap();
 
     // Start with 2 arms
     assert_eq!(bandit.arms().len(), 2);
@@ -90,11 +74,7 @@ fn test_direct_construction() {
     let bandit = Bandit::new(vec!["a", "b", "c"], Random).unwrap();
     assert_eq!(bandit.arms().len(), 3);
 
-    // Test with builder
-    let bandit = Bandit::builder()
-        .arms(vec!["x", "y"])
-        .policy(EpsilonGreedy::new(0.2))
-        .build()
-        .unwrap();
-    assert_eq!(bandit.arms().len(), 2);
+    // Test with direct construction
+    let bandit2 = Bandit::new(vec!["x", "y"], EpsilonGreedy::new(0.2)).unwrap();
+    assert_eq!(bandit2.arms().len(), 2);
 }

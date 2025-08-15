@@ -1,6 +1,6 @@
 use rand::{Rng, SeedableRng};
 use std::collections::HashMap;
-use trashpanda::{Bandit, policies::*};
+use trashpanda::{Bandit, ContextFreeAdapter, policies::*};
 
 fn main() {
     println!("TrashPanda: Multi-Armed Bandit Algorithm Comparison\n");
@@ -29,7 +29,9 @@ fn main() {
         println!("\nRandom");
         println!("{}", "-".repeat(6));
 
-        let mut bandit = Bandit::new(arms.clone(), Random).unwrap();
+        let policy = Random;
+        let adapter = ContextFreeAdapter::new(policy);
+        let mut bandit = Bandit::new(arms.clone(), adapter).unwrap();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let mut total_reward = 0.0;
         let mut arm_selections = HashMap::new();
@@ -37,7 +39,7 @@ fn main() {
         // Simulate 1000 rounds
         for _ in 0..1000 {
             // Select an arm
-            let selected_arm = bandit.predict_with_rng(&mut rng).unwrap();
+            let selected_arm = bandit.predict(&mut rng).unwrap();
 
             // Track selection
             *arm_selections.entry(selected_arm).or_insert(0) += 1;
@@ -69,7 +71,7 @@ fn main() {
         }
 
         // Show final expectations
-        let expectations = bandit.predict_expectations().unwrap();
+        let expectations = bandit.predict_expectations();
         println!("  Final arm probabilities:");
 
         let mut exp_vec: Vec<_> = expectations.iter().collect();
@@ -85,13 +87,15 @@ fn main() {
         println!("\nEpsilon-Greedy (ε=0.1)");
         println!("{}", "-".repeat(23));
 
-        let mut bandit = Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap();
+        let policy = EpsilonGreedy::new(0.1);
+        let adapter = ContextFreeAdapter::new(policy);
+        let mut bandit = Bandit::new(arms.clone(), adapter).unwrap();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let mut total_reward = 0.0;
         let mut arm_selections = HashMap::new();
 
         for _ in 0..1000 {
-            let selected_arm = bandit.predict_with_rng(&mut rng).unwrap();
+            let selected_arm = bandit.predict(&mut rng).unwrap();
             *arm_selections.entry(selected_arm).or_insert(0) += 1;
             let true_prob = true_rewards[selected_arm];
             let reward = if rng.random::<f64>() < true_prob {
@@ -111,7 +115,7 @@ fn main() {
         for (arm, count) in selections {
             println!("    {}: {} ({:.1}%)", arm, count, (*count as f64 / 10.0));
         }
-        let expectations = bandit.predict_expectations().unwrap();
+        let expectations = bandit.predict_expectations();
         println!("  Final arm probabilities:");
         let mut exp_vec: Vec<_> = expectations.iter().collect();
         exp_vec.sort_by_key(|&(arm, _)| *arm);
@@ -125,13 +129,15 @@ fn main() {
         println!("\nUCB1 (α=1.414)");
         println!("{}", "-".repeat(14));
 
-        let mut bandit = Bandit::new(arms.clone(), Ucb::new(1.414)).unwrap();
+        let policy = Ucb::new(1.414);
+        let adapter = ContextFreeAdapter::new(policy);
+        let mut bandit = Bandit::new(arms.clone(), adapter).unwrap();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let mut total_reward = 0.0;
         let mut arm_selections = HashMap::new();
 
         for _ in 0..1000 {
-            let selected_arm = bandit.predict_with_rng(&mut rng).unwrap();
+            let selected_arm = bandit.predict(&mut rng).unwrap();
             *arm_selections.entry(selected_arm).or_insert(0) += 1;
             let true_prob = true_rewards[selected_arm];
             let reward = if rng.random::<f64>() < true_prob {
@@ -151,7 +157,7 @@ fn main() {
         for (arm, count) in selections {
             println!("    {}: {} ({:.1}%)", arm, count, (*count as f64 / 10.0));
         }
-        let expectations = bandit.predict_expectations().unwrap();
+        let expectations = bandit.predict_expectations();
         println!("  Final arm probabilities:");
         let mut exp_vec: Vec<_> = expectations.iter().collect();
         exp_vec.sort_by_key(|&(arm, _)| *arm);
@@ -165,13 +171,15 @@ fn main() {
         println!("\nThompson Sampling");
         println!("{}", "-".repeat(17));
 
-        let mut bandit = Bandit::new(arms, ThompsonSampling::new()).unwrap();
+        let policy = ThompsonSampling::new();
+        let adapter = ContextFreeAdapter::new(policy);
+        let mut bandit = Bandit::new(arms, adapter).unwrap();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let mut total_reward = 0.0;
         let mut arm_selections = HashMap::new();
 
         for _ in 0..1000 {
-            let selected_arm = bandit.predict_with_rng(&mut rng).unwrap();
+            let selected_arm = bandit.predict(&mut rng).unwrap();
             *arm_selections.entry(selected_arm).or_insert(0) += 1;
             let true_prob = true_rewards[selected_arm];
             let reward = if rng.random::<f64>() < true_prob {
@@ -191,7 +199,7 @@ fn main() {
         for (arm, count) in selections {
             println!("    {}: {} ({:.1}%)", arm, count, (*count as f64 / 10.0));
         }
-        let expectations = bandit.predict_expectations().unwrap();
+        let expectations = bandit.predict_expectations();
         println!("  Final arm probabilities:");
         let mut exp_vec: Vec<_> = expectations.iter().collect();
         exp_vec.sort_by_key(|&(arm, _)| *arm);

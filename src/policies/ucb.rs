@@ -1,4 +1,5 @@
 use super::Policy;
+use crate::error::{PolicyError, PolicyResult};
 use indexmap::IndexSet;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -191,6 +192,32 @@ where
     fn reset(&mut self) {
         self.arm_stats.clear();
         self.total_rounds = 0;
+    }
+
+    fn update_with_context(
+        &mut self,
+        _decisions: &[A],
+        _contexts: Option<&[Vec<f64>]>,
+        _rewards: &[f64],
+    ) -> PolicyResult<()> {
+        Err(PolicyError::ContextNotSupported)
+    }
+
+    fn select_with_context(
+        &self,
+        _arms: &IndexSet<A>,
+        _context: Option<&[f64]>,
+        _rng: &mut dyn rand::RngCore,
+    ) -> PolicyResult<Option<A>> {
+        Err(PolicyError::ContextNotSupported)
+    }
+
+    fn expectations_with_context(
+        &self,
+        _arms: &IndexSet<A>,
+        _context: Option<&[f64]>,
+    ) -> PolicyResult<HashMap<A, f64>> {
+        Err(PolicyError::ContextNotSupported)
     }
 }
 
