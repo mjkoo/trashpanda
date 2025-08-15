@@ -7,7 +7,7 @@ fn test_random_policy_basic() {
     let bandit = Bandit::builder()
         .arms(vec!["a", "b", "c"])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<trashpanda::policies::Random>()
         .unwrap();
 
     // Should be able to predict
@@ -20,7 +20,7 @@ fn test_random_policy_expectations() {
     let bandit = Bandit::builder()
         .arms(vec![1, 2, 3, 4])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<trashpanda::policies::Random>()
         .unwrap();
 
     let expectations = bandit.predict_expectations().unwrap();
@@ -37,7 +37,7 @@ fn test_random_policy_distribution() {
     let bandit = Bandit::builder()
         .arms(vec!["red", "green", "blue"])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<trashpanda::policies::Random>()
         .unwrap();
 
     // Make many predictions and check distribution
@@ -62,7 +62,7 @@ fn test_random_policy_with_training() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<trashpanda::policies::Random>()
         .unwrap();
 
     // Train with some data
@@ -82,7 +82,7 @@ fn test_random_policy_partial_fit() {
     let mut bandit = Bandit::builder()
         .arms(vec!["x", "y", "z"])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<trashpanda::policies::Random>()
         .unwrap();
 
     // Partial fit with some data
@@ -99,7 +99,7 @@ fn test_random_policy_dynamic_arms() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<trashpanda::policies::Random>()
         .unwrap();
 
     // Initial expectations

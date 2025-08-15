@@ -8,7 +8,7 @@ fn test_epsilon_greedy_pure_exploitation() {
     let mut bandit = Bandit::builder()
         .arms(vec!["a", "b", "c"])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.0 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Train with data where "b" is clearly the best
@@ -30,7 +30,7 @@ fn test_epsilon_greedy_pure_exploration() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 1.0 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Train with data
@@ -49,7 +49,7 @@ fn test_epsilon_greedy_mixed_strategy() {
     let mut bandit = Bandit::builder()
         .arms(vec!["red", "green", "blue"])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.2 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Train with data where "green" is best
@@ -76,7 +76,7 @@ fn test_epsilon_greedy_learning() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Initially all arms are equal
@@ -101,7 +101,7 @@ fn test_epsilon_greedy_incremental_learning() {
     let mut bandit = Bandit::builder()
         .arms(vec!["x", "y", "z"])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.0 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Incrementally train
@@ -121,7 +121,7 @@ fn test_epsilon_greedy_dynamic_arms() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.3 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Train initial arms
@@ -150,7 +150,7 @@ fn test_epsilon_greedy_distribution() {
     let mut bandit = Bandit::builder()
         .arms(vec!["a", "b", "c"])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.3 })
-        .build()
+        .build::<trashpanda::policies::EpsilonGreedy<_>>()
         .unwrap();
 
     // Train so "b" is clearly best

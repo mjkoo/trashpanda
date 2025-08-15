@@ -8,12 +8,13 @@
 //!
 //! ```
 //! use trashpanda::{Bandit, LearningPolicy};
+//! use trashpanda::policies::EpsilonGreedy;
 //!
 //! // Create a bandit with three arms
 //! let mut bandit = Bandit::builder()
 //!     .arms(vec!["red", "blue", "green"])
 //!     .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-//!     .build()
+//!     .build::<EpsilonGreedy<_>>()
 //!     .unwrap();
 //!
 //! // Train on historical data
@@ -30,12 +31,11 @@
 
 mod bandit;
 mod error;
-mod policies;
+pub mod policies;
 
 // Re-export main types
-pub use bandit::{ArmMetadata, Bandit, BanditBuilder, LearningPolicy};
+pub use bandit::{ArmMetadata, Bandit, BanditBuilder, BuildablePolicy, LearningPolicy};
 pub use error::{BanditError, Result};
-pub use policies::Policy;
 
 /// Prelude module for convenient imports.
 ///

@@ -1,18 +1,18 @@
-mod epsilon_greedy;
-mod random;
-
-use std::collections::HashMap;
+pub mod epsilon_greedy;
+pub mod random;
 
 pub use epsilon_greedy::EpsilonGreedy;
 pub use random::Random;
 
+use std::collections::HashMap;
+
 /// Core trait for bandit learning policies
 ///
-/// Note: This trait uses `dyn rand::RngCore` instead of a generic parameter
-/// to maintain object-safety, allowing `Box<dyn Policy<A>>` to be used.
-/// The slight performance cost of dynamic dispatch is acceptable for the
-/// flexibility it provides in the Bandit implementation.
-pub trait Policy<A>: Send + Sync {
+/// This trait no longer requires Send + Sync bounds, as they're only
+/// needed when using dynamic dispatch with threading. The generic
+/// Bandit<A, P> design allows the compiler to determine these bounds
+/// based on actual usage.
+pub trait Policy<A> {
     /// Update the policy with observed rewards for decisions
     fn update(&mut self, decisions: &[A], rewards: &[f64]);
 

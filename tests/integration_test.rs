@@ -1,5 +1,6 @@
 //! Integration tests for core infrastructure.
 
+use trashpanda::policies::{EpsilonGreedy, Random};
 use trashpanda::prelude::*;
 
 #[test]
@@ -7,7 +8,7 @@ fn test_basic_bandit_creation() {
     let bandit = Bandit::builder()
         .arms(vec!["option_a", "option_b", "option_c"])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<Random>()
         .unwrap();
 
     assert_eq!(bandit.n_arms(), 3);
@@ -21,7 +22,7 @@ fn test_integer_arms() {
     let bandit = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.15 })
-        .build()
+        .build::<EpsilonGreedy<_>>()
         .unwrap();
 
     assert_eq!(bandit.n_arms(), 3);
@@ -35,7 +36,7 @@ fn test_string_arms() {
     let bandit = Bandit::builder()
         .arms(vec!["red", "green", "blue"])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.15 })
-        .build()
+        .build::<EpsilonGreedy<_>>()
         .unwrap();
 
     assert_eq!(bandit.n_arms(), 3);
@@ -49,7 +50,7 @@ fn test_dynamic_arm_management() {
     let mut bandit = Bandit::builder()
         .arms(vec![1, 2])
         .policy(LearningPolicy::Random)
-        .build()
+        .build::<Random>()
         .unwrap();
 
     // Start with 2 arms
@@ -76,35 +77,37 @@ fn test_policy_validation() {
     let result = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.5 })
-        .build();
+        .build::<EpsilonGreedy<_>>();
     assert!(result.is_ok());
 
     // Invalid epsilon (too high)
     let result = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: 1.5 })
-        .build();
+        .build::<EpsilonGreedy<_>>();
     assert!(matches!(result, Err(BanditError::InvalidParameter { .. })));
 
     // Invalid epsilon (negative)
     let result = Bandit::builder()
         .arms(vec![1, 2, 3])
         .policy(LearningPolicy::EpsilonGreedy { epsilon: -0.1 })
-        .build();
+        .build::<EpsilonGreedy<_>>();
     assert!(matches!(result, Err(BanditError::InvalidParameter { .. })));
+}
 
-    // TODO: Enable UCB tests when UCB is implemented
-    // // Valid UCB alpha
-    // let result = Bandit::builder()
-    //     .arms(vec![1, 2, 3])
-    //     .policy(LearningPolicy::Ucb { alpha: 2.0 })
-    //     .build();
-    // assert!(result.is_ok());
+#[test]
+fn test_direct_construction() {
+    // Test with convenience constructors
+    let bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.1).unwrap();
+    assert_eq!(bandit.n_arms(), 3);
 
-    // // Invalid UCB alpha
-    // let result = Bandit::builder()
-    //     .arms(vec![1, 2, 3])
-    //     .policy(LearningPolicy::Ucb { alpha: 0.0 })
-    //     .build();
-    // assert!(matches!(result, Err(BanditError::InvalidParameter { .. })));
+    let bandit = Bandit::random(vec!["a", "b", "c"]).unwrap();
+    assert_eq!(bandit.n_arms(), 3);
+
+    // Test direct new
+    let bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
+    assert_eq!(bandit.n_arms(), 3);
+
+    let bandit = Bandit::new(vec!["x", "y"], EpsilonGreedy::new(0.2)).unwrap();
+    assert_eq!(bandit.n_arms(), 2);
 }

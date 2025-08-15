@@ -10,7 +10,6 @@ pub struct EpsilonGreedy<A> {
     arm_stats: HashMap<A, ArmStats>,
 }
 
-// Conditional Debug implementation
 impl<A> std::fmt::Debug for EpsilonGreedy<A>
 where
     A: std::fmt::Debug,
@@ -45,16 +44,42 @@ where
 {
     /// Creates a new EpsilonGreedy policy with the given epsilon
     pub fn new(epsilon: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&epsilon),
+            "epsilon must be between 0 and 1"
+        );
         Self {
             epsilon,
             arm_stats: HashMap::new(),
         }
     }
+
+    /// Gets the epsilon value
+    pub fn epsilon(&self) -> f64 {
+        self.epsilon
+    }
+
+    /// Sets the epsilon value
+    pub fn set_epsilon(&mut self, epsilon: f64) {
+        assert!(
+            (0.0..=1.0).contains(&epsilon),
+            "epsilon must be between 0 and 1"
+        );
+        self.epsilon = epsilon;
+    }
+
+    /// Gets the statistics for a specific arm
+    pub fn arm_stats(&self, arm: &A) -> Option<(usize, f64)> {
+        self.arm_stats
+            .get(arm)
+            .map(|s| (s.pulls, s.average_reward()))
+    }
 }
 
+// Note: No more Send + Sync bounds required!
 impl<A> Policy<A> for EpsilonGreedy<A>
 where
-    A: Clone + Eq + Hash + Send + Sync,
+    A: Clone + Eq + Hash,
 {
     fn update(&mut self, decisions: &[A], rewards: &[f64]) {
         for (arm, reward) in decisions.iter().zip(rewards.iter()) {
@@ -76,7 +101,7 @@ where
             // Random selection (exploration)
             arms.choose(rng).cloned()
         } else {
-            // Greedy selection (exploitation)
+            // Select arm with highest average reward (exploitation)
             self.find_best_arm(arms)
         }
     }
@@ -120,19 +145,17 @@ impl<A> EpsilonGreedy<A>
 where
     A: Clone + Eq + Hash,
 {
-    /// Finds the arm with the highest average reward from the given arms
+    /// Find the arm with highest average reward
     fn find_best_arm(&self, arms: &[A]) -> Option<A> {
         arms.iter()
-            .map(|arm| {
-                let avg = self
-                    .arm_stats
-                    .get(arm)
-                    .map(|s| s.average_reward())
-                    .unwrap_or(0.0);
-                (arm, avg)
+            .max_by(|a, b| {
+                let reward_a = self.arm_stats.get(*a).map_or(0.0, |s| s.average_reward());
+                let reward_b = self.arm_stats.get(*b).map_or(0.0, |s| s.average_reward());
+                reward_a
+                    .partial_cmp(&reward_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(arm, _)| arm.clone())
+            .cloned()
     }
 }
 
@@ -224,5 +247,29 @@ mod tests {
 
         // Arm 1 should be selected more than random (33%)
         assert!(count_1 > 40);
+    }
+
+    #[test]
+    fn test_epsilon_greedy_getters_setters() {
+        let mut policy = EpsilonGreedy::<i32>::new(0.5);
+        assert_eq!(policy.epsilon(), 0.5);
+
+        policy.set_epsilon(0.3);
+        assert_eq!(policy.epsilon(), 0.3);
+    }
+
+    #[test]
+    fn test_arm_stats() {
+        let mut policy = EpsilonGreedy::new(0.5);
+
+        // Initially no stats
+        assert_eq!(policy.arm_stats(&1), None);
+
+        // After training
+        policy.update(&[1, 1, 2], &[0.5, 0.7, 0.3]);
+
+        assert_eq!(policy.arm_stats(&1), Some((2, 0.6)));
+        assert_eq!(policy.arm_stats(&2), Some((1, 0.3)));
+        assert_eq!(policy.arm_stats(&3), None);
     }
 }

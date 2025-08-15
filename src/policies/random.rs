@@ -9,7 +9,7 @@ pub struct Random;
 
 impl<A> Policy<A> for Random
 where
-    A: Clone + Eq + Hash + Send + Sync,
+    A: Clone + Eq + Hash,
 {
     fn update(&mut self, _decisions: &[A], _rewards: &[f64]) {
         // Random policy doesn't learn from feedback
