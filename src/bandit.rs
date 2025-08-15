@@ -1,7 +1,15 @@
-//! Core bandit implementation and builder.
-
-use crate::{Arm, BanditError, Result};
+use crate::policies::{EpsilonGreedy, Policy, Random};
+use crate::{BanditError, Result};
+use rand::Rng;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::hash::Hash;
+
+// Note on trait bounds:
+// - Clone + Eq + Hash: Required for HashMap storage and arm comparison
+// - Send + Sync: Required because we store policies as trait objects (Box<dyn Policy<A>>)
+// - Debug: Optional, only required for debug formatting
+// - Display: Not required, we use generic error messages instead
 
 /// Learning policy configuration.
 #[derive(Clone, Debug)]
@@ -30,23 +38,41 @@ pub struct ArmMetadata {
 }
 
 /// Multi-armed bandit implementation.
-#[allow(dead_code)] // TODO: Remove when algorithms are implemented
-pub struct Bandit {
+pub struct Bandit<A>
+where
+    A: Clone + Eq + Hash + Send + Sync,
+{
     /// Available arms.
-    arms: Vec<Arm>,
+    arms: Vec<A>,
     /// Set of arms for O(1) membership checking.
-    arm_set: HashSet<Arm>,
+    arm_set: HashSet<A>,
     /// Metadata for each arm.
-    arm_metadata: HashMap<Arm, ArmMetadata>,
-    /// Expected reward for each arm.
-    arm_expectations: HashMap<Arm, f64>,
+    arm_metadata: HashMap<A, ArmMetadata>,
     /// Learning policy.
-    policy: LearningPolicy,
-    /// Random number generator.
-    rng: rand::rngs::StdRng,
+    #[allow(dead_code)] // Will be used when we add policy-specific behaviors
+    policy_type: LearningPolicy,
+    /// Policy implementation.
+    policy: Box<dyn Policy<A> + Send + Sync + 'static>,
 }
 
-impl Bandit {
+// Conditional Debug implementation - only available when A implements Debug
+impl<A> std::fmt::Debug for Bandit<A>
+where
+    A: Clone + Eq + Hash + Send + Sync + Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Bandit")
+            .field("arms", &self.arms)
+            .field("n_arms", &self.n_arms())
+            .field("policy_type", &self.policy_type)
+            .finish()
+    }
+}
+
+impl<A> Bandit<A>
+where
+    A: Clone + Eq + Hash + Send + Sync,
+{
     /// Creates a new bandit builder.
     ///
     /// # Examples
@@ -60,12 +86,12 @@ impl Bandit {
     ///     .build()
     ///     .unwrap();
     /// ```
-    pub fn builder() -> BanditBuilder {
+    pub fn builder() -> BanditBuilder<A> {
         BanditBuilder::new()
     }
 
     /// Returns a slice of all arms in the bandit.
-    pub fn arms(&self) -> &[Arm] {
+    pub fn arms(&self) -> &[A] {
         &self.arms
     }
 
@@ -75,7 +101,7 @@ impl Bandit {
     }
 
     /// Checks if an arm exists in the bandit.
-    pub fn has_arm(&self, arm: &Arm) -> bool {
+    pub fn has_arm(&self, arm: &A) -> bool {
         self.arm_set.contains(arm)
     }
 
@@ -84,16 +110,18 @@ impl Bandit {
     /// # Errors
     ///
     /// Returns `BanditError::ArmAlreadyExists` if the arm already exists.
-    pub fn add_arm(&mut self, arm: Arm) -> Result<()> {
+    pub fn add_arm(&mut self, arm: A) -> Result<()> {
         if self.has_arm(&arm) {
-            return Err(BanditError::ArmAlreadyExists(arm));
+            return Err(BanditError::ArmAlreadyExists);
         }
 
         self.arms.push(arm.clone());
         self.arm_set.insert(arm.clone());
         self.arm_metadata
             .insert(arm.clone(), ArmMetadata::default());
-        self.arm_expectations.insert(arm, 0.0);
+
+        // Reset policy stats for this arm in case it was previously removed
+        self.policy.reset_arm(&arm);
 
         Ok(())
     }
@@ -103,58 +131,97 @@ impl Bandit {
     /// # Errors
     ///
     /// Returns `BanditError::ArmNotFound` if the arm doesn't exist.
-    pub fn remove_arm(&mut self, arm: &Arm) -> Result<()> {
+    pub fn remove_arm(&mut self, arm: &A) -> Result<()> {
         if !self.has_arm(arm) {
-            return Err(BanditError::ArmNotFound(arm.clone()));
+            return Err(BanditError::ArmNotFound);
         }
 
         self.arms.retain(|a| a != arm);
         self.arm_set.remove(arm);
         self.arm_metadata.remove(arm);
-        self.arm_expectations.remove(arm);
+
+        // Note: We don't reset policy stats here in case the arm is re-added later
+        // The policy can decide how to handle missing arms
 
         Ok(())
     }
 
-    /// Placeholder for fit implementation.
-    pub fn fit(&mut self, _decisions: &[Arm], _rewards: &[f64]) -> Result<()> {
-        // Will be implemented with specific policies
-        todo!("Implement fit based on policy")
+    /// Trains the bandit on historical data.
+    pub fn fit(&mut self, decisions: &[A], rewards: &[f64]) -> Result<()> {
+        if decisions.len() != rewards.len() {
+            return Err(BanditError::DimensionMismatch {
+                message: format!(
+                    "decisions and rewards must have same length: {} != {}",
+                    decisions.len(),
+                    rewards.len()
+                ),
+            });
+        }
+
+        // Validate all decisions are valid arms
+        for decision in decisions {
+            if !self.has_arm(decision) {
+                return Err(BanditError::ArmNotFound);
+            }
+        }
+
+        // Update metadata
+        for (arm, reward) in decisions.iter().zip(rewards.iter()) {
+            if let Some(metadata) = self.arm_metadata.get_mut(arm) {
+                metadata.is_trained = true;
+                metadata.pull_count += 1;
+                metadata.total_reward += reward;
+                metadata.sum_squared_reward += reward * reward;
+            }
+        }
+
+        // Update policy
+        self.policy.update(decisions, rewards);
+
+        Ok(())
     }
 
-    /// Placeholder for partial_fit implementation.
-    pub fn partial_fit(&mut self, _decisions: &[Arm], _rewards: &[f64]) -> Result<()> {
-        // Will be implemented with specific policies
-        todo!("Implement partial_fit based on policy")
+    /// Incrementally trains the bandit on new data.
+    pub fn partial_fit(&mut self, decisions: &[A], rewards: &[f64]) -> Result<()> {
+        self.fit(decisions, rewards)
     }
 
-    /// Placeholder for predict implementation.
-    pub fn predict(&self) -> Result<Arm> {
-        // Will be implemented with specific policies
-        todo!("Implement predict based on policy")
+    /// Predicts the best arm to pull using the default RNG.
+    pub fn predict(&self) -> Result<A> {
+        self.predict_with_rng(&mut rand::rng())
     }
 
-    /// Placeholder for predict_expectations implementation.
-    pub fn predict_expectations(&self) -> Result<HashMap<Arm, f64>> {
-        // Will be implemented with specific policies
-        todo!("Implement predict_expectations based on policy")
+    /// Predicts the best arm to pull using a provided RNG.
+    pub fn predict_with_rng<R: Rng>(&self, rng: &mut R) -> Result<A> {
+        self.policy
+            .select(&self.arms, rng as &mut dyn rand::RngCore)
+            .ok_or(BanditError::NoArmsAvailable)
+    }
+
+    /// Returns the expected reward for each arm.
+    pub fn predict_expectations(&self) -> Result<HashMap<A, f64>> {
+        Ok(self.policy.expectations(&self.arms))
     }
 }
 
 /// Builder for constructing a `Bandit`.
-pub struct BanditBuilder {
-    arms: Option<Vec<Arm>>,
+pub struct BanditBuilder<A>
+where
+    A: Clone + Eq + Hash + Send + Sync,
+{
+    arms: Option<Vec<A>>,
     policy: Option<LearningPolicy>,
-    seed: Option<u64>,
 }
 
-impl BanditBuilder {
+impl<A> BanditBuilder<A>
+where
+    A: Clone + Eq + Hash + Send + Sync,
+{
     /// Creates a new builder.
     pub fn new() -> Self {
         Self {
             arms: None,
             policy: None,
-            seed: None,
         }
     }
 
@@ -165,27 +232,20 @@ impl BanditBuilder {
     /// ```
     /// use trashpanda::Bandit;
     ///
-    /// let builder = Bandit::builder()
+    /// let builder = Bandit::<i32>::builder()
     ///     .arms(vec![1, 2, 3]);
     /// ```
-    pub fn arms<I, A>(mut self, arms: I) -> Self
+    pub fn arms<I>(mut self, arms: I) -> Self
     where
         I: IntoIterator<Item = A>,
-        A: Into<Arm>,
     {
-        self.arms = Some(arms.into_iter().map(|a| a.into()).collect());
+        self.arms = Some(arms.into_iter().collect());
         self
     }
 
     /// Sets the learning policy.
     pub fn policy(mut self, policy: LearningPolicy) -> Self {
         self.policy = Some(policy);
-        self
-    }
-
-    /// Sets the random seed for reproducibility.
-    pub fn seed(mut self, seed: u64) -> Self {
-        self.seed = Some(seed);
         self
     }
 
@@ -198,9 +258,14 @@ impl BanditBuilder {
     /// - No policy was specified
     /// - Duplicate arms were provided
     /// - Invalid policy parameters
-    pub fn build(self) -> Result<Bandit> {
-        use rand::SeedableRng;
-
+    ///
+    /// # Note
+    /// Requires A: 'static because we store policies as trait objects.
+    /// This is satisfied by most common types (String, i32, etc.)
+    pub fn build(self) -> Result<Bandit<A>>
+    where
+        A: 'static,
+    {
         let arms = self.arms.ok_or_else(|| BanditError::BuilderError {
             message: "arms must be specified".to_string(),
         })?;
@@ -211,12 +276,12 @@ impl BanditBuilder {
             });
         }
 
-        let policy = self.policy.ok_or_else(|| BanditError::BuilderError {
+        let policy_type = self.policy.ok_or_else(|| BanditError::BuilderError {
             message: "policy must be specified".to_string(),
         })?;
 
         // Validate policy parameters
-        match &policy {
+        match &policy_type {
             LearningPolicy::EpsilonGreedy { epsilon } => {
                 if !(0.0..=1.0).contains(epsilon) {
                     return Err(BanditError::InvalidParameter {
@@ -242,33 +307,39 @@ impl BanditBuilder {
             });
         }
 
-        // Initialize metadata and expectations
+        // Initialize metadata
         let mut arm_metadata = HashMap::new();
-        let mut arm_expectations = HashMap::new();
         for arm in &arms {
             arm_metadata.insert(arm.clone(), ArmMetadata::default());
-            arm_expectations.insert(arm.clone(), 0.0);
         }
 
-        // Create RNG
-        let rng = if let Some(seed) = self.seed {
-            rand::rngs::StdRng::seed_from_u64(seed)
-        } else {
-            rand::rngs::StdRng::from_entropy()
+        // Create policy implementation
+        // Note: We need Send + Sync + 'static here for the trait object
+        let policy: Box<dyn Policy<A> + Send + Sync + 'static> = match &policy_type {
+            LearningPolicy::Random => Box::new(Random),
+            LearningPolicy::EpsilonGreedy { epsilon } => Box::new(EpsilonGreedy::new(*epsilon)),
+            LearningPolicy::Ucb { .. } => {
+                todo!("UCB implementation")
+            }
+            LearningPolicy::ThompsonSampling => {
+                todo!("Thompson Sampling implementation")
+            }
         };
 
         Ok(Bandit {
             arms,
             arm_set,
             arm_metadata,
-            arm_expectations,
+            policy_type,
             policy,
-            rng,
         })
     }
 }
 
-impl Default for BanditBuilder {
+impl<A> Default for BanditBuilder<A>
+where
+    A: Clone + Eq + Hash + Send + Sync,
+{
     fn default() -> Self {
         Self::new()
     }
@@ -287,18 +358,17 @@ mod tests {
             .unwrap();
 
         assert_eq!(bandit.n_arms(), 3);
-        assert!(bandit.has_arm(&Arm::from("a")));
-        assert!(bandit.has_arm(&Arm::from("b")));
-        assert!(bandit.has_arm(&Arm::from("c")));
-        assert!(!bandit.has_arm(&Arm::from("d")));
+        assert!(bandit.has_arm(&"a"));
+        assert!(bandit.has_arm(&"b"));
+        assert!(bandit.has_arm(&"c"));
+        assert!(!bandit.has_arm(&"d"));
     }
 
     #[test]
-    fn test_builder_with_seed() {
+    fn test_builder_with_policy() {
         let bandit = Bandit::builder()
             .arms(vec![1, 2, 3])
             .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
-            .seed(42)
             .build()
             .unwrap();
 
@@ -308,7 +378,9 @@ mod tests {
     #[test]
     fn test_builder_errors() {
         // No arms
-        let result = Bandit::builder().policy(LearningPolicy::Random).build();
+        let result = Bandit::<i32>::builder()
+            .policy(LearningPolicy::Random)
+            .build();
         assert!(matches!(result, Err(BanditError::BuilderError { .. })));
 
         // No policy
@@ -353,25 +425,49 @@ mod tests {
             .unwrap();
 
         // Add new arm
-        assert!(bandit.add_arm(Arm::from(4)).is_ok());
+        assert!(bandit.add_arm(4).is_ok());
         assert_eq!(bandit.n_arms(), 4);
-        assert!(bandit.has_arm(&Arm::from(4)));
+        assert!(bandit.has_arm(&4));
 
         // Try to add existing arm
         assert!(matches!(
-            bandit.add_arm(Arm::from(4)),
-            Err(BanditError::ArmAlreadyExists(_))
+            bandit.add_arm(4),
+            Err(BanditError::ArmAlreadyExists)
         ));
 
         // Remove arm
-        assert!(bandit.remove_arm(&Arm::from(4)).is_ok());
+        assert!(bandit.remove_arm(&4).is_ok());
         assert_eq!(bandit.n_arms(), 3);
-        assert!(!bandit.has_arm(&Arm::from(4)));
+        assert!(!bandit.has_arm(&4));
 
         // Try to remove non-existent arm
         assert!(matches!(
-            bandit.remove_arm(&Arm::from(4)),
-            Err(BanditError::ArmNotFound(_))
+            bandit.remove_arm(&4),
+            Err(BanditError::ArmNotFound)
+        ));
+    }
+
+    #[test]
+    fn test_fit_validates_arms() {
+        let mut bandit = Bandit::builder()
+            .arms(vec![1, 2, 3])
+            .policy(LearningPolicy::EpsilonGreedy { epsilon: 0.1 })
+            .build()
+            .unwrap();
+
+        // Valid fit
+        assert!(bandit.fit(&[1, 2, 3], &[0.5, 0.8, 0.3]).is_ok());
+
+        // Invalid arm
+        assert!(matches!(
+            bandit.fit(&[1, 2, 4], &[0.5, 0.8, 0.3]),
+            Err(BanditError::ArmNotFound)
+        ));
+
+        // Mismatched lengths
+        assert!(matches!(
+            bandit.fit(&[1, 2], &[0.5, 0.8, 0.3]),
+            Err(BanditError::DimensionMismatch { .. })
         ));
     }
 }

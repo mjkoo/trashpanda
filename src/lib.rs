@@ -7,7 +7,7 @@
 //! # Quick Start
 //!
 //! ```
-//! use trashpanda::{Bandit, LearningPolicy, Arm};
+//! use trashpanda::{Bandit, LearningPolicy};
 //!
 //! // Create a bandit with three arms
 //! let mut bandit = Bandit::builder()
@@ -17,7 +17,7 @@
 //!     .unwrap();
 //!
 //! // Train on historical data
-//! let decisions = vec![Arm::from("red"), Arm::from("blue"), Arm::from("red")];
+//! let decisions = vec!["red", "blue", "red"];
 //! let rewards = vec![1.0, 0.5, 0.8];
 //! // bandit.fit(&decisions, &rewards).unwrap();
 //!
@@ -28,14 +28,14 @@
 // #![warn(missing_docs)]
 // #![warn(clippy::all)]
 
-mod arm;
 mod bandit;
 mod error;
+mod policies;
 
 // Re-export main types
-pub use arm::Arm;
 pub use bandit::{ArmMetadata, Bandit, BanditBuilder, LearningPolicy};
 pub use error::{BanditError, Result};
+pub use policies::Policy;
 
 /// Prelude module for convenient imports.
 ///
@@ -45,5 +45,5 @@ pub use error::{BanditError, Result};
 /// use trashpanda::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{Arm, Bandit, BanditError, LearningPolicy, Result};
+    pub use crate::{Bandit, BanditError, LearningPolicy, Result};
 }

@@ -1,6 +1,5 @@
 //! Error types for the trashpanda library.
 
-use crate::Arm;
 use thiserror::Error;
 
 /// Result type alias for bandit operations.
@@ -10,12 +9,12 @@ pub type Result<T> = std::result::Result<T, BanditError>;
 #[derive(Error, Debug)]
 pub enum BanditError {
     /// The specified arm was not found in the bandit.
-    #[error("arm {0} not found")]
-    ArmNotFound(Arm),
+    #[error("arm not found")]
+    ArmNotFound,
 
     /// The specified arm already exists in the bandit.
-    #[error("arm {0} already exists")]
-    ArmAlreadyExists(Arm),
+    #[error("arm already exists")]
+    ArmAlreadyExists,
 
     /// No arms are available in the bandit.
     #[error("no arms available")]
@@ -52,8 +51,8 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let err = BanditError::ArmNotFound(Arm::from(42));
-        assert_eq!(err.to_string(), "arm 42 not found");
+        let err = BanditError::ArmNotFound;
+        assert_eq!(err.to_string(), "arm not found");
 
         let err = BanditError::InvalidParameter {
             message: "epsilon must be between 0 and 1".to_string(),
