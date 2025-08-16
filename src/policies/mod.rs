@@ -1,10 +1,14 @@
 pub mod epsilon_greedy;
+pub mod lingreedy;
+pub mod lints;
 pub mod linucb;
 pub mod random;
 pub mod thompson;
 pub mod ucb;
 
 pub use epsilon_greedy::EpsilonGreedy;
+pub use lingreedy::LinGreedy;
+pub use lints::LinTs;
 pub use linucb::LinUcb;
 pub use random::Random;
 pub use thompson::ThompsonSampling;
