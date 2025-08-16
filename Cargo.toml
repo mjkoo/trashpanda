@@ -15,17 +15,17 @@ keywords = [
 categories = ["algorithms", "science"]
 
 [dependencies]
-thiserror = "2.0"
+approx = "0.5"
+indexmap = "2.10.0"
+nalgebra = "0.34"
 ordered-float = "5.0"
 rand = "0.9"
 rand_distr = "0.5"
-indexmap = "2.10.0"
-nalgebra = "0.34"
+thiserror = "2.0"
 
 [dev-dependencies]
-approx = "0.5"
-proptest = "1.7"
 criterion = "0.7"
+proptest = "1.7"
 rand_xoshiro = "0.7"
 
 [[bench]]

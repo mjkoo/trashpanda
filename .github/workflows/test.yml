@@ -93,11 +93,10 @@ jobs:
           key: minimal-versions
           shared-key: workspace
 
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
       - name: Install cargo-minimal-versions
-        run: cargo binstall --no-confirm cargo-minimal-versions
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-minimal-versions
 
       - name: Check minimal versions
         run: cargo minimal-versions check
@@ -119,11 +118,10 @@ jobs:
           key: security-audit
           shared-key: workspace
 
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
       - name: Install cargo-audit
-        run: cargo binstall --no-confirm cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Run security audit
         run: cargo audit
@@ -199,11 +197,10 @@ jobs:
           key: msrv
           shared-key: workspace
 
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
       - name: Install cargo-msrv
-        run: cargo binstall --no-confirm cargo-msrv
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack,cargo-msrv
 
       - name: Verify MSRV
         run: cargo msrv verify

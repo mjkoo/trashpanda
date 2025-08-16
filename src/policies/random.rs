@@ -89,6 +89,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::abs_diff_eq;
     use rand::SeedableRng;
 
     #[test]
@@ -129,9 +130,9 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let expectations = policy.expectations(&arms, (), &mut rng);
         assert_eq!(expectations.len(), 3);
-        assert!((expectations[&1] - 0.6).abs() < 1e-10); // (0.5 + 0.7) / 2
-        assert!((expectations[&2] - 0.3).abs() < 1e-10);
-        assert!((expectations[&3] - 0.9).abs() < 1e-10);
+        assert!(abs_diff_eq!(expectations[&1], 0.6)); // (0.5 + 0.7) / 2
+        assert!(abs_diff_eq!(expectations[&2], 0.3));
+        assert!(abs_diff_eq!(expectations[&3], 0.9));
     }
 
     #[test]

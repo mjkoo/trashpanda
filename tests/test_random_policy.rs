@@ -1,3 +1,4 @@
+use approx::{abs_diff_eq, assert_abs_diff_eq};
 use rand::SeedableRng;
 use std::collections::HashMap;
 use trashpanda::Bandit;
@@ -45,7 +46,7 @@ fn test_random_policy_distribution() {
     // Each arm should be selected roughly 1/3 of the time
     for count in counts.values() {
         let proportion = *count as f64 / n_samples as f64;
-        assert!((proportion - 1.0 / 3.0).abs() < 0.05); // Allow 5% deviation
+        assert_abs_diff_eq!(proportion, 1.0 / 3.0, epsilon = 0.05); // Allow 5% deviation
     }
 }
 
@@ -62,9 +63,9 @@ fn test_random_policy_with_training() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(42);
     let expectations = bandit.predict_expectations_simple(&mut rng);
     // Expected: arm 1 = (1.0 + 0.8) / 2 = 0.9, arm 2 = (0.5 + 0.9) / 2 = 0.7, arm 3 = 0.2 / 1 = 0.2
-    assert!((expectations[&1] - 0.9).abs() < 1e-10);
-    assert!((expectations[&2] - 0.7).abs() < 1e-10);
-    assert!((expectations[&3] - 0.2).abs() < 1e-10);
+    assert!(abs_diff_eq!(expectations[&1], 0.9));
+    assert!(abs_diff_eq!(expectations[&2], 0.7));
+    assert!(abs_diff_eq!(expectations[&3], 0.2));
 }
 
 #[test]

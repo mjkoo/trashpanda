@@ -1,5 +1,6 @@
 use crate::policies::Policy;
 use crate::regression::RidgeRegression;
+use approx::abs_diff_eq;
 use indexmap::IndexSet;
 use rand::prelude::*;
 use std::collections::HashMap;
@@ -105,7 +106,7 @@ where
             for arm in arms {
                 let predicted_reward = self.get_prediction(arm, context);
 
-                if (predicted_reward - best_reward).abs() < 1e-10 {
+                if abs_diff_eq!(predicted_reward, best_reward) {
                     // Tie - add to best arms
                     best_arms.push(arm.clone());
                 } else if predicted_reward > best_reward {

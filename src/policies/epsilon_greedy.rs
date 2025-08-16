@@ -157,6 +157,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::abs_diff_eq;
     use rand::SeedableRng;
 
     #[test]
@@ -205,9 +206,9 @@ mod tests {
         // Expectations should reflect actual average rewards
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let expectations = policy.expectations(&arms, (), &mut rng);
-        assert!((expectations[&2] - 0.9).abs() < 1e-10); // (1.0 + 0.8) / 2 = 0.9
-        assert!((expectations[&1] - 0.5).abs() < 1e-10); // 0.5 / 1 = 0.5
-        assert!((expectations[&3] - 0.3).abs() < 1e-10); // 0.3 / 1 = 0.3
+        assert!(abs_diff_eq!(expectations[&2], 0.9)); // (1.0 + 0.8) / 2 = 0.9
+        assert!(abs_diff_eq!(expectations[&1], 0.5)); // 0.5 / 1 = 0.5
+        assert!(abs_diff_eq!(expectations[&3], 0.3)); // 0.3 / 1 = 0.3
     }
 
     #[test]
@@ -229,11 +230,11 @@ mod tests {
         let expectations = policy.expectations(&arms, (), &mut rng);
 
         // "y" should have average of (0.9 + 0.8) / 2 = 0.85
-        assert!((expectations[&"y"] - 0.85).abs() < 1e-10);
+        assert!(abs_diff_eq!(expectations[&"y"], 0.85));
         // "x" should have 0.4 / 1 = 0.4
-        assert!((expectations[&"x"] - 0.4).abs() < 1e-10);
+        assert!(abs_diff_eq!(expectations[&"x"], 0.4));
         // "z" should have 0.2 / 1 = 0.2
-        assert!((expectations[&"z"] - 0.2).abs() < 1e-10);
+        assert!(abs_diff_eq!(expectations[&"z"], 0.2));
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use crate::policies::Policy;
 use crate::regression::RidgeRegression;
+use approx::abs_diff_eq;
 use indexmap::IndexSet;
 use rand::prelude::*;
 use std::collections::HashMap;
@@ -91,7 +92,7 @@ where
         for arm in arms {
             let ucb = self.calculate_ucb(arm, features);
 
-            if (ucb - best_ucb).abs() < 1e-10 {
+            if abs_diff_eq!(ucb, best_ucb) {
                 // Tie - add to best arms
                 best_arms.push(arm.clone());
             } else if ucb > best_ucb {

@@ -1,3 +1,4 @@
+use approx::{abs_diff_eq, assert_abs_diff_eq};
 use rand::SeedableRng;
 use std::collections::HashMap;
 use trashpanda::Bandit;
@@ -35,9 +36,9 @@ fn test_epsilon_greedy_pure_exploration() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(42);
     let expectations = bandit.predict_expectations_simple(&mut rng);
     // Expected: arm 1 = 0.1, arm 2 = (1.0 + 0.9) / 2 = 0.95, arm 3 = 0.2
-    assert!((expectations[&1] - 0.1).abs() < 1e-10);
-    assert!((expectations[&2] - 0.95).abs() < 1e-10);
-    assert!((expectations[&3] - 0.2).abs() < 1e-10);
+    assert!(abs_diff_eq!(expectations[&1], 0.1));
+    assert!(abs_diff_eq!(expectations[&2], 0.95));
+    assert!(abs_diff_eq!(expectations[&3], 0.2));
 }
 
 #[test]
@@ -58,9 +59,9 @@ fn test_epsilon_greedy_mixed_strategy() {
     let expectations = bandit.predict_expectations_simple(&mut rng);
 
     // Expected: red = (0.3 + 0.2) / 2 = 0.25, green = (0.9 + 0.8) / 2 = 0.85, blue = 0.1
-    assert!((expectations[&"red"] - 0.25).abs() < 1e-10);
-    assert!((expectations[&"green"] - 0.85).abs() < 1e-10);
-    assert!((expectations[&"blue"] - 0.1).abs() < 1e-10);
+    assert!(abs_diff_eq!(expectations[&"red"], 0.25));
+    assert!(abs_diff_eq!(expectations[&"green"], 0.85));
+    assert!(abs_diff_eq!(expectations[&"blue"], 0.1));
 }
 
 #[test]
@@ -154,11 +155,11 @@ fn test_epsilon_greedy_distribution() {
 
     // "b" should be selected approximately 70% + 10% = 80% of the time
     let b_proportion = counts[&"b"] as f64 / n_samples as f64;
-    assert!((b_proportion - 0.8).abs() < 0.02); // Allow 2% deviation
+    assert_abs_diff_eq!(b_proportion, 0.8, epsilon = 0.02); // Allow 2% deviation
 
     // "a" and "c" should each be selected approximately 10% of the time
     let a_proportion = counts[&"a"] as f64 / n_samples as f64;
     let c_proportion = counts[&"c"] as f64 / n_samples as f64;
-    assert!((a_proportion - 0.1).abs() < 0.02);
-    assert!((c_proportion - 0.1).abs() < 0.02);
+    assert_abs_diff_eq!(a_proportion, 0.1, epsilon = 0.02);
+    assert_abs_diff_eq!(c_proportion, 0.1, epsilon = 0.02);
 }

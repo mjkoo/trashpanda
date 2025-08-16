@@ -1,3 +1,4 @@
+use approx::abs_diff_ne;
 use nalgebra::{DMatrix, DVector};
 
 /// Ridge regression model for online learning
@@ -53,7 +54,7 @@ impl RidgeRegression {
         let a_inv_x = &self.a_inv * &x_vec;
         let denominator = 1.0 + x_vec.dot(&a_inv_x);
 
-        if denominator.abs() > 1e-10 {
+        if abs_diff_ne!(denominator, 0.0, epsilon = 1e-10) {
             self.a_inv -= &a_inv_x * a_inv_x.transpose() / denominator;
         } else {
             // Fallback to direct inversion if numerical issues

@@ -205,6 +205,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::{abs_diff_eq, assert_abs_diff_eq};
     use rand::SeedableRng;
 
     #[test]
@@ -287,7 +288,7 @@ mod tests {
         let stats = policy.arm_stats(&1).unwrap();
         assert_eq!(stats.0, 2.0); // successes
         assert_eq!(stats.1, 1.0); // failures
-        assert!((stats.2 - 2.0 / 3.0).abs() < 0.1); // expected value ≈ 0.67
+        assert_abs_diff_eq!(stats.2, 2.0 / 3.0, epsilon = 0.1); // expected value ≈ 0.67
     }
 
     #[test]
@@ -341,8 +342,8 @@ mod tests {
         // "a": Beta(1 + 0.6, 1 + 0.4) = Beta(1.6, 1.4), mean = 1.6/3.0 ≈ 0.533
         // "b": Beta(1 + 0.4, 1 + 0.6) = Beta(1.4, 1.6), mean = 1.4/3.0 ≈ 0.467
         // "c": Beta(1 + 0.5, 1 + 0.5) = Beta(1.5, 1.5), mean = 1.5/3.0 = 0.5
-        assert!((expectations[&"a"] - (1.6 / 3.0)).abs() < 1e-10);
-        assert!((expectations[&"b"] - (1.4 / 3.0)).abs() < 1e-10);
-        assert!((expectations[&"c"] - (1.5 / 3.0)).abs() < 1e-10);
+        assert!(abs_diff_eq!(expectations[&"a"], 1.6 / 3.0));
+        assert!(abs_diff_eq!(expectations[&"b"], 1.4 / 3.0));
+        assert!(abs_diff_eq!(expectations[&"c"], 1.5 / 3.0));
     }
 }

@@ -175,6 +175,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::abs_diff_eq;
     use rand::SeedableRng;
 
     #[test]
@@ -271,7 +272,7 @@ mod tests {
 
         let stats = policy.arm_stats(&1).unwrap();
         assert_eq!(stats.0, 2); // pulls
-        assert!((stats.1 - 0.6).abs() < 1e-10); // average reward
+        assert!(abs_diff_eq!(stats.1, 0.6)); // average reward
         assert!(stats.2 > 0.6); // UCB score should be higher than average
 
         assert_eq!(policy.total_rounds(), 3);
