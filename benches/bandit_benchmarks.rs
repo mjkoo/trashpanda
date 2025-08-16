@@ -1,5 +1,6 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
+use std::hint::black_box;
 use trashpanda::{
     Bandit,
     policies::{EpsilonGreedy, Random},
@@ -12,7 +13,7 @@ fn bench_arm_operations(c: &mut Criterion) {
     for n_arms in [10, 100, 1000].iter() {
         group.bench_with_input(BenchmarkId::new("has_arm", n_arms), n_arms, |b, &n| {
             let arms: Vec<i32> = (0..n).collect();
-            let bandit = Bandit::new(arms.clone(), Random).unwrap();
+            let bandit = Bandit::new(arms.clone(), Random::default()).unwrap();
             let test_arm = n / 2; // Middle arm
 
             b.iter(|| black_box(bandit.has_arm(&test_arm)));
@@ -22,7 +23,7 @@ fn bench_arm_operations(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let arms: Vec<i32> = (0..n).collect();
-                    Bandit::new(arms, Random).unwrap()
+                    Bandit::new(arms, Random::default()).unwrap()
                 },
                 |mut bandit| black_box(bandit.add_arm(n + 1)),
                 criterion::BatchSize::SmallInput,
@@ -33,7 +34,7 @@ fn bench_arm_operations(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let arms: Vec<i32> = (0..n).collect();
-                    Bandit::new(arms, Random).unwrap()
+                    Bandit::new(arms, Random::default()).unwrap()
                 },
                 |mut bandit| black_box(bandit.remove_arm(&(n / 2))),
                 criterion::BatchSize::SmallInput,
@@ -54,7 +55,7 @@ fn bench_prediction(c: &mut Criterion) {
             n_arms,
             |b, &n| {
                 let arms: Vec<i32> = (0..n).collect();
-                let bandit = Bandit::new(arms, Random).unwrap();
+                let bandit = Bandit::new(arms, Random::default()).unwrap();
                 let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
                 b.iter(|| black_box(bandit.predict_simple(&mut rng).unwrap()));
@@ -93,7 +94,9 @@ fn bench_prediction(c: &mut Criterion) {
                 let rewards: Vec<f64> = (0..100).map(|i| (i as f64) / 100.0).collect();
                 bandit.fit_simple(&decisions, &rewards).unwrap();
 
-                b.iter(|| black_box(bandit.predict_expectations_simple()));
+                let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+                b.iter(|| black_box(bandit.predict_expectations_simple(&mut rng)));
             },
         );
     }

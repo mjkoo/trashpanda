@@ -2,6 +2,7 @@
 name = "trashpanda"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.87.0"
 description = "A Rust library for contextual multi-armed bandits"
 repository = "https://github.com/mjkoo/trashpanda"
 license = "Apache-2.0 OR MIT"
@@ -19,13 +20,13 @@ ordered-float = "5.0"
 rand = "0.9"
 rand_distr = "0.5"
 indexmap = "2.10.0"
-nalgebra = "0.33"
+nalgebra = "0.34"
 
 [dev-dependencies]
 approx = "0.5"
 proptest = "1.7"
-criterion = "0.5"
-rand_xoshiro = "0.6"
+criterion = "0.7"
+rand_xoshiro = "0.7"
 
 [[bench]]
 name = "bandit_benchmarks"
