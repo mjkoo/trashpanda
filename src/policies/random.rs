@@ -1,5 +1,6 @@
 use super::Policy;
 use indexmap::IndexSet;
+use rand::Rng;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -20,8 +21,6 @@ where
             return None;
         }
 
-        // Use Rng trait to generate a random index
-        use rand::Rng;
         let idx = rng.random_range(0..arms.len());
         arms.get_index(idx).cloned()
     }
@@ -58,8 +57,7 @@ mod tests {
         arms.insert("c");
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
-        let choice =
-            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
+        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
         assert!(arms.contains(&choice));
     }
 
@@ -84,10 +82,7 @@ mod tests {
         let arms: IndexSet<i32> = IndexSet::new();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
-        assert_eq!(
-            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore),
-            None
-        );
+        assert_eq!(Policy::select(&policy, &arms, &(), &mut rng), None);
         assert_eq!(policy.expectations(&arms, &()).len(), 0);
     }
 }

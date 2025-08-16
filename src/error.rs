@@ -13,12 +13,12 @@ pub type PolicyResult<T> = std::result::Result<T, PolicyError>;
 #[non_exhaustive]
 pub enum BanditError {
     /// The specified arm was not found in the bandit.
-    #[error("arm not found in bandit")]
-    ArmNotFound,
+    #[error("arm '{arm}' not found in bandit")]
+    ArmNotFound { arm: String },
 
     /// The specified arm already exists in the bandit.
-    #[error("arm already exists")]
-    ArmAlreadyExists,
+    #[error("arm '{arm}' already exists")]
+    ArmAlreadyExists { arm: String },
 
     /// No arms are available in the bandit.
     #[error("no arms available for selection")]
@@ -56,8 +56,10 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let err = BanditError::ArmNotFound;
-        assert_eq!(err.to_string(), "arm not found in bandit");
+        let err = BanditError::ArmNotFound {
+            arm: "test_arm".to_string(),
+        };
+        assert_eq!(err.to_string(), "arm 'test_arm' not found in bandit");
 
         let err = BanditError::DimensionMismatch {
             message: "context dimensions mismatch".to_string(),

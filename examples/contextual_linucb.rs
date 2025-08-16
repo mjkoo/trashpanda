@@ -3,9 +3,8 @@
 //! This example shows how to use LinUCB for contextual decision-making,
 //! where the optimal arm depends on context features (e.g., user characteristics).
 
-use rand::thread_rng;
+use rand::rng;
 use trashpanda::Bandit;
-use trashpanda::policies::LinUcb;
 
 fn main() {
     println!("=== LinUCB Contextual Bandit Example ===\n");
@@ -63,7 +62,7 @@ fn main() {
     // Testing phase: Make predictions for new users
     println!("--- Testing Phase ---");
 
-    let mut rng = thread_rng();
+    let mut rng = rng();
 
     // Test contexts representing different user types
     let test_contexts = vec![

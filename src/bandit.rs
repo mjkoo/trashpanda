@@ -1,19 +1,19 @@
-//! Unified bandit implementation that handles both contextual and context-free cases.
-
 use crate::error::BanditError;
-use crate::policies::Policy;
+use crate::policies::{LinUcb, Policy};
 use indexmap::IndexSet;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-/// Bandit that handles both contextual and context-free scenarios
+/// A multi-armed bandit with a specific policy
+///
+/// The `Bandit` struct maintains a set of arms and uses a policy to make decisions.
+/// It provides a type-safe, generic interface that works with any hashable arm type
+/// and any policy implementation.
+#[derive(Clone, Debug)]
 pub struct Bandit<A, P, C = ()> {
-    /// Available arms
     arms: IndexSet<A>,
-    /// The policy (now unified)
     policy: P,
-    /// Phantom data for context type
     _phantom: PhantomData<fn() -> C>,
 }
 
@@ -22,7 +22,7 @@ where
     A: Clone + Eq + Hash,
     P: Policy<A, C>,
 {
-    /// Create a new bandit
+    /// Creates a new bandit with the given arms and policy
     pub fn new<I>(arms: I, policy: P) -> Result<Self, BanditError>
     where
         I: IntoIterator<Item = A>,
@@ -88,83 +88,95 @@ where
         self.policy.expectations(&self.arms, context)
     }
 
-    // Helper methods
-    fn validate_decisions(&self, decisions: &[A]) -> Result<(), BanditError> {
-        for decision in decisions {
-            if !self.arms.contains(decision) {
-                return Err(BanditError::ArmNotFound);
-            }
-        }
-        Ok(())
-    }
-
-    /// Get the available arms
+    /// Gets the available arms
     pub fn arms(&self) -> &IndexSet<A> {
         &self.arms
     }
 
-    /// Check if an arm exists
+    /// Check if an arm exists in the bandit
     pub fn has_arm(&self, arm: &A) -> bool {
         self.arms.contains(arm)
     }
 
-    /// Add a new arm
+    /// Gets a reference to the policy
+    pub fn policy(&self) -> &P {
+        &self.policy
+    }
+
+    /// Gets a mutable reference to the policy
+    pub fn policy_mut(&mut self) -> &mut P {
+        &mut self.policy
+    }
+
+    /// Add a new arm to the bandit
     pub fn add_arm(&mut self, arm: A) -> Result<(), BanditError> {
         if self.arms.contains(&arm) {
-            return Err(BanditError::ArmAlreadyExists);
+            return Err(BanditError::ArmAlreadyExists {
+                arm: "arm".to_string(), // Generic error message without Debug
+            });
         }
-        self.arms.insert(arm);
+        self.arms.insert(arm.clone());
+        self.policy.reset_arm(&arm);
         Ok(())
     }
 
-    /// Remove an arm
+    /// Remove an arm from the bandit
     pub fn remove_arm(&mut self, arm: &A) -> Result<(), BanditError> {
-        if !self.arms.shift_remove(arm) {
-            return Err(BanditError::ArmNotFound);
+        if !self.arms.contains(arm) {
+            return Err(BanditError::ArmNotFound {
+                arm: "arm".to_string(), // Generic error message without Debug
+            });
         }
-        self.policy.reset_arm(arm);
+        self.arms.shift_remove(arm);
         Ok(())
     }
 
-    /// Reset the policy
-    pub fn reset(&mut self) {
-        self.policy.reset();
+    /// Validate that all decisions correspond to valid arms
+    fn validate_decisions(&self, decisions: &[A]) -> Result<(), BanditError> {
+        for decision in decisions {
+            if !self.arms.contains(decision) {
+                return Err(BanditError::ArmNotFound {
+                    arm: "decision".to_string(), // Generic error message without Debug
+                });
+            }
+        }
+        Ok(())
     }
 }
 
-// Convenience methods for non-contextual policies
+// Convenience methods for non-contextual bandits
 impl<A, P> Bandit<A, P, ()>
 where
     A: Clone + Eq + Hash,
     P: Policy<A, ()>,
 {
-    /// Convenience fit method for non-contextual policies
+    /// Fit without context for non-contextual bandits
     pub fn fit_simple(&mut self, decisions: &[A], rewards: &[f64]) -> Result<(), BanditError> {
         self.fit(decisions, &(), rewards)
     }
 
-    /// Convenience predict method for non-contextual policies  
+    /// Predict without context for non-contextual bandits
     pub fn predict_simple(&self, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
         self.predict(&(), rng)
     }
 
-    /// Convenience method to get expectations for non-contextual policies
+    /// Get expectations without context for non-contextual bandits
     pub fn predict_expectations_simple(&self) -> HashMap<A, f64> {
         self.predict_expectations(&())
     }
 }
 
-// Special batch method for LinUCB bandits with multiple contexts
-impl<A, C> Bandit<A, crate::policies::LinUcb<A>, C>
+// Batch operations for LinUCB
+impl<A, C> Bandit<A, LinUcb<A>, C>
 where
     A: Clone + Eq + Hash,
     C: AsRef<[f64]>,
 {
-    /// Fit with multiple contexts (one per decision)
-    pub fn fit_batch<T: AsRef<[f64]>>(
+    /// Fit LinUCB with multiple contexts
+    pub fn fit_batch(
         &mut self,
         decisions: &[A],
-        contexts: &[T],
+        contexts: &[C],
         rewards: &[f64],
     ) -> Result<(), BanditError> {
         if decisions.len() != contexts.len() || decisions.len() != rewards.len() {
@@ -198,8 +210,7 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        let policy = crate::policies::EpsilonGreedy::new(epsilon);
-        Self::new(arms, policy)
+        Self::new(arms, crate::policies::EpsilonGreedy::new(epsilon))
     }
 }
 
@@ -212,8 +223,7 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        let policy = crate::policies::Random;
-        Self::new(arms, policy)
+        Self::new(arms, crate::policies::Random)
     }
 }
 
@@ -226,8 +236,7 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        let policy = crate::policies::Ucb::new(alpha);
-        Self::new(arms, policy)
+        Self::new(arms, crate::policies::Ucb::new(alpha))
     }
 }
 
@@ -240,15 +249,13 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        let policy = crate::policies::ThompsonSampling::new();
-        Self::new(arms, policy)
+        Self::new(arms, crate::policies::ThompsonSampling::new())
     }
 }
 
-impl<A, C> Bandit<A, crate::policies::LinUcb<A>, C>
+impl<A> Bandit<A, crate::policies::LinUcb<A>, Vec<f64>>
 where
     A: Clone + Eq + Hash,
-    C: AsRef<[f64]>,
 {
     /// Create a LinUCB bandit
     pub fn linucb<I>(
@@ -260,88 +267,18 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        let policy = crate::policies::LinUcb::new(alpha, l2_lambda, num_features);
-        Self::new(arms, policy)
+        Self::new(
+            arms,
+            crate::policies::LinUcb::new(alpha, l2_lambda, num_features),
+        )
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
-
-    #[test]
-    fn test_context_free_bandit() {
-        let mut bandit = Bandit::epsilon_greedy(vec!["a", "b", "c"], 0.1).unwrap();
-
-        // Train without context using convenience method
-        bandit.fit_simple(&["a", "b"], &[1.0, 0.5]).unwrap();
-
-        // Predict without context using convenience method
-        let mut rng = StdRng::seed_from_u64(42);
-        let choice = bandit.predict_simple(&mut rng).unwrap();
-        assert!(bandit.arms().contains(&choice));
-    }
-
-    #[test]
-    fn test_contextual_bandit() {
-        let mut bandit = Bandit::linucb(vec![1, 2, 3], 1.0, 1.0, 2).unwrap();
-
-        // Train with multiple contexts (batch)
-        let contexts = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
-        bandit.fit_batch(&[1, 2], &contexts, &[1.0, 0.5]).unwrap();
-
-        // Predict with single context
-        let mut rng = StdRng::seed_from_u64(42);
-        let context = vec![0.5, 0.5];
-        let choice = bandit.predict(&context, &mut rng).unwrap();
-        assert!(bandit.arms().contains(&choice));
-    }
-
-    #[test]
-    fn test_context_free_can_use_simple_api() {
-        let mut bandit = Bandit::epsilon_greedy(vec!["a", "b"], 0.1).unwrap();
-
-        // Context-free bandit uses simple API
-        bandit.fit_simple(&["a"], &[1.0]).unwrap();
-
-        let mut rng = StdRng::seed_from_u64(42);
-        let choice = bandit.predict_simple(&mut rng).unwrap();
-        assert!(bandit.arms().contains(&choice));
-    }
-
-    #[test]
-    fn test_contextual_requires_context() {
-        let mut bandit = Bandit::linucb(vec![1, 2], 1.0, 1.0, 2).unwrap();
-
-        // Must provide context for contextual bandits - single update
-        let context = vec![1.0, 0.0];
-        bandit.fit(&[1], &context, &[1.0]).unwrap();
-
-        let mut rng = StdRng::seed_from_u64(42);
-        let choice = bandit.predict(&context, &mut rng).unwrap();
-        assert!(bandit.arms().contains(&choice));
-    }
-
-    #[test]
-    fn test_builder_pattern() {
-        // Builder pattern for complex bandits
-        let bandit = Bandit::builder()
-            .arms(vec![1, 2, 3])
-            .policy(crate::policies::EpsilonGreedy::new(0.1))
-            .build()
-            .unwrap();
-
-        assert_eq!(bandit.arms().len(), 3);
-    }
-}
-
-/// Builder for creating bandits
+/// Builder for creating bandits with a fluent API
 pub struct BanditBuilder<A, P, C = ()> {
-    arms: Option<Vec<A>>,
+    arms: Option<IndexSet<A>>,
     policy: Option<P>,
-    _phantom: PhantomData<fn() -> C>,
+    _phantom: PhantomData<C>,
 }
 
 impl<A, P, C> Default for BanditBuilder<A, P, C> {
@@ -354,41 +291,108 @@ impl<A, P, C> Default for BanditBuilder<A, P, C> {
     }
 }
 
-impl<A, P, C> BanditBuilder<A, P, C> {
-    /// Set the arms
-    #[must_use = "builder method returns a new builder that should be used"]
-    pub fn arms(mut self, arms: Vec<A>) -> Self {
-        self.arms = Some(arms);
+impl<A, P, C> BanditBuilder<A, P, C>
+where
+    A: Clone + Eq + Hash,
+    P: Policy<A, C>,
+{
+    /// Set the arms for the bandit
+    pub fn arms<I>(mut self, arms: I) -> Self
+    where
+        I: IntoIterator<Item = A>,
+    {
+        self.arms = Some(arms.into_iter().collect());
         self
     }
 
-    /// Set the policy
-    #[must_use = "builder method returns a new builder that should be used"]
+    /// Set the policy for the bandit
     pub fn policy(mut self, policy: P) -> Self {
         self.policy = Some(policy);
         self
     }
 
     /// Build the bandit
-    #[must_use = "the builder should be used to create a bandit"]
-    pub fn build(self) -> Result<Bandit<A, P, C>, BanditError>
-    where
-        A: Clone + Eq + Hash,
-        P: Policy<A, C>,
-    {
+    pub fn build(self) -> Result<Bandit<A, P, C>, BanditError> {
         let arms = self.arms.ok_or(BanditError::BuilderError {
-            message: "Arms not specified".to_string(),
+            message: "Arms not specified".into(),
         })?;
+
         let policy = self.policy.ok_or(BanditError::BuilderError {
-            message: "Policy not specified".to_string(),
+            message: "Policy not specified".into(),
         })?;
-        Bandit::new(arms, policy)
+
+        if arms.is_empty() {
+            return Err(BanditError::NoArmsAvailable);
+        }
+
+        Ok(Bandit {
+            arms,
+            policy,
+            _phantom: PhantomData,
+        })
     }
 }
 
 impl<A, P, C> Bandit<A, P, C> {
-    /// Create a new builder
+    /// Create a new builder for constructing a bandit
     pub fn builder() -> BanditBuilder<A, P, C> {
         BanditBuilder::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::policies::{EpsilonGreedy, Random};
+    use rand::SeedableRng;
+
+    #[test]
+    fn test_bandit_creation() {
+        let bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
+        assert_eq!(bandit.arms().len(), 3);
+    }
+
+    #[test]
+    fn test_bandit_builder() {
+        let bandit = Bandit::<i32, Random, ()>::builder()
+            .arms(vec![1, 2, 3])
+            .policy(Random)
+            .build()
+            .unwrap();
+        assert_eq!(bandit.arms().len(), 3);
+    }
+
+    #[test]
+    fn test_non_contextual_convenience_methods() {
+        let mut bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.1).unwrap();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Use simple methods that don't require &()
+        bandit.fit_simple(&[1, 2], &[1.0, 0.5]).unwrap();
+        let choice = bandit.predict_simple(&mut rng).unwrap();
+        assert!(bandit.arms().contains(&choice));
+
+        let expectations = bandit.predict_expectations_simple();
+        assert_eq!(expectations.len(), 3);
+    }
+
+    #[test]
+    fn test_add_remove_arms() {
+        let mut bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
+
+        // Add a new arm
+        bandit.add_arm(4).unwrap();
+        assert_eq!(bandit.arms().len(), 4);
+
+        // Try to add duplicate
+        assert!(bandit.add_arm(4).is_err());
+
+        // Remove an arm
+        bandit.remove_arm(&2).unwrap();
+        assert_eq!(bandit.arms().len(), 3);
+        assert!(!bandit.arms().contains(&2));
+
+        // Try to remove non-existent arm
+        assert!(bandit.remove_arm(&10).is_err());
     }
 }

@@ -1,5 +1,6 @@
 use super::Policy;
 use indexmap::IndexSet;
+use rand::Rng;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -94,7 +95,6 @@ where
         }
 
         // Explore with probability epsilon
-        use rand::Rng;
         let r: f64 = rng.random_range(0.0..1.0);
         if r < self.epsilon {
             // Random selection (exploration)
@@ -174,8 +174,7 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should return one of the arms randomly
-        let choice =
-            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
+        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
         assert!(arms.contains(&choice));
 
         // Expectations should be uniform
@@ -203,8 +202,7 @@ mod tests {
 
         // Should always pick arm 2 (highest average reward)
         for _ in 0..10 {
-            let choice =
-                Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
+            let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
             assert_eq!(choice, 2);
         }
 
@@ -261,7 +259,7 @@ mod tests {
         // With epsilon=0.5 and arm 1 being best, it should be selected often
         let mut count_1 = 0;
         for _ in 0..100 {
-            if Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore) == Some(1) {
+            if Policy::select(&policy, &arms, &(), &mut rng) == Some(1) {
                 count_1 += 1;
             }
         }

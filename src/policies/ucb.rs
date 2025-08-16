@@ -209,8 +209,7 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should select an unpulled arm (any of them)
-        let choice =
-            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
+        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
         assert!(arms.contains(&choice));
 
         // All unpulled arms should have equal probability
@@ -239,8 +238,7 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should balance between high reward (arm 2) and exploration (arm 3)
-        let choice =
-            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
+        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
         // The exact choice depends on UCB calculation
         assert!([2, 3].contains(&choice));
     }
@@ -274,10 +272,8 @@ mod tests {
         let mut rng2 = rand::rngs::StdRng::seed_from_u64(999);
 
         // UCB is deterministic - should select same arm regardless of RNG
-        let choice1 =
-            Policy::select(&policy, &arms, &(), &mut rng1 as &mut dyn rand::RngCore).unwrap();
-        let choice2 =
-            Policy::select(&policy, &arms, &(), &mut rng2 as &mut dyn rand::RngCore).unwrap();
+        let choice1 = Policy::select(&policy, &arms, &(), &mut rng1).unwrap();
+        let choice2 = Policy::select(&policy, &arms, &(), &mut rng2).unwrap();
         assert_eq!(choice1, choice2);
     }
 

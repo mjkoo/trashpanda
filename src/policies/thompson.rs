@@ -232,8 +232,7 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should select an arm (stochastic)
-        let choice =
-            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
+        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
         assert!(arms.contains(&choice));
     }
 
@@ -281,12 +280,8 @@ mod tests {
         // Thompson Sampling is stochastic - might select different arms
         let mut choices = std::collections::HashSet::new();
         for _ in 0..10 {
-            choices.insert(
-                Policy::select(&policy, &arms, &(), &mut rng1 as &mut dyn rand::RngCore).unwrap(),
-            );
-            choices.insert(
-                Policy::select(&policy, &arms, &(), &mut rng2 as &mut dyn rand::RngCore).unwrap(),
-            );
+            choices.insert(Policy::select(&policy, &arms, &(), &mut rng1).unwrap());
+            choices.insert(Policy::select(&policy, &arms, &(), &mut rng2).unwrap());
         }
 
         // With similar rewards, both arms should be selected at least once
