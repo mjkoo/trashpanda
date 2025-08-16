@@ -6,12 +6,7 @@ rust-version = "1.87.0"
 description = "A Rust library for contextual multi-armed bandits"
 repository = "https://github.com/mjkoo/trashpanda"
 license = "Apache-2.0 OR MIT"
-keywords = [
-    "bandit",
-    "reinforcement-learning",
-    "machine-learning",
-    "optimization",
-]
+keywords = ["bandit", "optimization"]
 categories = ["algorithms", "science"]
 
 [dependencies]
