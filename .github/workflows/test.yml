@@ -33,11 +33,6 @@ jobs:
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust"
-          key: test-${{ matrix.rust }}
-          save-if: true
-          shared-key: workspace
 
       - name: Check formatting
         if: matrix.rust == 'stable'
@@ -88,15 +83,11 @@ jobs:
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust"
-          key: minimal-versions
-          shared-key: workspace
 
       - name: Install cargo-minimal-versions
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-minimal-versions
+          tool: cargo-hack,cargo-minimal-versions
 
       - name: Check minimal versions
         run: cargo minimal-versions check
@@ -113,10 +104,6 @@ jobs:
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust"
-          key: security-audit
-          shared-key: workspace
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@v2
@@ -139,10 +126,6 @@ jobs:
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust"
-          key: benchmarks
-          shared-key: workspace
 
       - name: Run benchmarks
         run: cargo bench --no-run
@@ -162,10 +145,6 @@ jobs:
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust"
-          key: coverage
-          shared-key: workspace
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -176,6 +155,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: lcov.info
           fail_ci_if_error: false
 
@@ -192,15 +172,11 @@ jobs:
 
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "v0-rust"
-          key: msrv
-          shared-key: workspace
 
       - name: Install cargo-msrv
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-hack,cargo-msrv
+          tool: cargo-msrv
 
       - name: Verify MSRV
         run: cargo msrv verify
