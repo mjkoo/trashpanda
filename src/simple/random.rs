@@ -1,8 +1,10 @@
-use super::Policy;
-use indexmap::IndexSet;
-use rand::Rng;
 use std::collections::HashMap;
 use std::hash::Hash;
+
+use indexmap::IndexSet;
+use rand::Rng;
+
+use crate::policy::Policy;
 
 /// Random selection policy - selects arms uniformly at random
 ///

@@ -1,9 +1,8 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use trashpanda::Bandit;
-use trashpanda::policies::{KNearest, LinGreedy};
+use trashpanda::{Bandit, contextual::lingreedy::LinGreedy, neighborhood::knearest::KNearest};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("K-Nearest Neighbors Contextual Bandit Demo");
     println!("==========================================\n");
 

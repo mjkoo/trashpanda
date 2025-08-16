@@ -1,7 +1,7 @@
 use rand::SeedableRng;
-use trashpanda::{Bandit, policies::EpsilonGreedy};
+use trashpanda::{Bandit, simple::epsilon_greedy::EpsilonGreedy};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("=== TrashPanda Batch Operations Demo ===\n");
 
     // Create a non-contextual epsilon-greedy bandit

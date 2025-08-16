@@ -1,10 +1,7 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
 use std::hint::black_box;
-use trashpanda::{
-    Bandit,
-    policies::{EpsilonGreedy, Random},
-};
+use trashpanda::{Bandit, simple::epsilon_greedy::EpsilonGreedy};
 
 fn bench_arm_operations(c: &mut Criterion) {
     let mut group = c.benchmark_group("arm_operations");
@@ -13,7 +10,7 @@ fn bench_arm_operations(c: &mut Criterion) {
     for n_arms in [10, 100, 1000].iter() {
         group.bench_with_input(BenchmarkId::new("has_arm", n_arms), n_arms, |b, &n| {
             let arms: Vec<i32> = (0..n).collect();
-            let bandit = Bandit::new(arms.clone(), Random::default()).unwrap();
+            let bandit = Bandit::random(arms.clone()).unwrap();
             let test_arm = n / 2; // Middle arm
 
             b.iter(|| black_box(bandit.has_arm(&test_arm)));
@@ -23,7 +20,7 @@ fn bench_arm_operations(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let arms: Vec<i32> = (0..n).collect();
-                    Bandit::new(arms, Random::default()).unwrap()
+                    Bandit::random(arms).unwrap()
                 },
                 |mut bandit| black_box(bandit.add_arm(n + 1)),
                 criterion::BatchSize::SmallInput,
@@ -34,7 +31,7 @@ fn bench_arm_operations(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let arms: Vec<i32> = (0..n).collect();
-                    Bandit::new(arms, Random::default()).unwrap()
+                    Bandit::random(arms).unwrap()
                 },
                 |mut bandit| black_box(bandit.remove_arm(&(n / 2))),
                 criterion::BatchSize::SmallInput,
@@ -55,7 +52,7 @@ fn bench_prediction(c: &mut Criterion) {
             n_arms,
             |b, &n| {
                 let arms: Vec<i32> = (0..n).collect();
-                let bandit = Bandit::new(arms, Random::default()).unwrap();
+                let bandit = Bandit::random(arms).unwrap();
                 let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
                 b.iter(|| black_box(bandit.predict_simple(&mut rng).unwrap()));
@@ -68,7 +65,7 @@ fn bench_prediction(c: &mut Criterion) {
             n_arms,
             |b, &n| {
                 let arms: Vec<i32> = (0..n).collect();
-                let mut bandit = Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap();
+                let mut bandit = Bandit::epsilon_greedy(arms.clone(), 0.1).unwrap();
 
                 // Train with some data
                 let decisions: Vec<i32> = (0..100).map(|i| i % n).collect();
@@ -87,7 +84,7 @@ fn bench_prediction(c: &mut Criterion) {
             n_arms,
             |b, &n| {
                 let arms: Vec<i32> = (0..n).collect();
-                let mut bandit = Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap();
+                let mut bandit = Bandit::epsilon_greedy(arms.clone(), 0.1).unwrap();
 
                 // Train with some data
                 let decisions: Vec<i32> = (0..100).map(|i| i % n).collect();
@@ -114,7 +111,7 @@ fn bench_training(c: &mut Criterion) {
             let rewards: Vec<f64> = (0..n).map(|i| (i as f64) / (n as f64)).collect();
 
             b.iter_batched(
-                || Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap(),
+                || Bandit::epsilon_greedy(arms.clone(), 0.1).unwrap(),
                 |mut bandit| {
                     bandit.fit_simple(&decisions, &rewards).unwrap();
                     black_box(())
@@ -133,7 +130,7 @@ fn bench_training(c: &mut Criterion) {
 
                 b.iter_batched(
                     || {
-                        let bandit = Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap();
+                        let bandit = Bandit::epsilon_greedy(arms.clone(), 0.1).unwrap();
                         let decisions: Vec<i32> = (0..n).map(|i| arms[i % arms.len()]).collect();
                         let rewards: Vec<f64> = (0..n).map(|i| (i as f64) / (n as f64)).collect();
                         (bandit, decisions, rewards)
@@ -173,7 +170,7 @@ fn bench_builder(c: &mut Criterion) {
 
     c.bench_function("direct_construction", |b| {
         let arms = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        b.iter(|| black_box(Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap()));
+        b.iter(|| black_box(Bandit::epsilon_greedy(arms.clone(), 0.1).unwrap()));
     });
 }
 

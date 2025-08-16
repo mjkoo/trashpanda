@@ -1,8 +1,7 @@
 use approx::{abs_diff_eq, assert_abs_diff_eq};
 use rand::SeedableRng;
 use std::collections::HashMap;
-use trashpanda::Bandit;
-use trashpanda::policies::EpsilonGreedy;
+use trashpanda::{Bandit, simple::epsilon_greedy::EpsilonGreedy};
 
 #[test]
 fn test_epsilon_greedy_pure_exploitation() {

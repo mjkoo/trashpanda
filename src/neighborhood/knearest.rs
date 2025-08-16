@@ -4,7 +4,7 @@ use std::hash::Hash;
 use indexmap::IndexSet;
 use rand::RngCore;
 
-use super::Policy;
+use crate::policy::Policy;
 
 /// K-Nearest Neighbors contextual policy wrapper
 ///
@@ -18,8 +18,7 @@ use super::Policy;
 ///
 /// # Example
 /// ```
-/// use trashpanda::Bandit;
-/// use trashpanda::policies::{KNearest, LinGreedy};
+/// use trashpanda::{Bandit, contextual::lingreedy::LinGreedy, neighborhood::knearest::KNearest};
 ///
 /// let underlying = LinGreedy::new(0.1, 1.0, 2); // contextual policy
 /// let policy = KNearest::new(underlying, 3, "euclidean");

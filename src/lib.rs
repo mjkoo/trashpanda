@@ -7,8 +7,7 @@
 //! # Quick Start
 //!
 //! ```
-//! use trashpanda::Bandit;
-//! use trashpanda::policies::EpsilonGreedy;
+//! use trashpanda::{Bandit, simple::epsilon_greedy::EpsilonGreedy};
 //!
 //! // Create a bandit with three arms directly
 //! let mut bandit = Bandit::new(
@@ -22,23 +21,39 @@
 //!     0.1
 //! ).unwrap();
 //!
+//! // Access arms using convenient methods
+//! println!("Number of arms: {}", bandit.arms_len());
+//!
+//! // Iterate over arms without exposing IndexSet
+//! for arm in bandit.arms_iter() {
+//!     println!("Available arm: {}", arm);
+//! }
+//!
+//! // Get arm by index (O(1) operation)
+//! if let Some(first_arm) = bandit.get_arm_by_index(0) {
+//!     println!("First arm: {}", first_arm);
+//! }
+//!
 //! // Train on historical data
 //! let decisions = vec!["red", "blue", "red"];
 //! let rewards = vec![1.0, 0.5, 0.8];
-//! // bandit.fit(&decisions, &rewards).unwrap();
+//! // bandit.fit_simple(&decisions, &rewards).unwrap();
 //!
 //! // Make a prediction
 //! // let mut rng = rand::thread_rng();
-//! // let choice = bandit.predict(&mut rng).unwrap();
+//! // let choice = bandit.predict_simple(&mut rng).unwrap();
 //! ```
 
 // #![warn(missing_docs)]
 // #![warn(clippy::all)]
 
 mod bandit;
+pub mod contextual;
 mod error;
-pub mod policies;
+pub mod neighborhood;
+pub mod policy;
 mod regression;
+pub mod simple;
 
 // Re-export main types
 pub use bandit::Bandit;
@@ -46,19 +61,3 @@ pub use error::{BanditError, Result};
 
 // Re-export IndexSet for users implementing custom policies
 pub use indexmap::IndexSet;
-
-/// Prelude module for convenient imports.
-///
-/// # Examples
-///
-/// ```
-/// use trashpanda::prelude::*;
-/// ```
-pub mod prelude {
-    pub use crate::policies::{
-        EpsilonGreedy, LinGreedy, LinTs, LinUcb, Policy, Random, ThompsonSampling, Ucb,
-    };
-    pub use crate::{Bandit, BanditError, Result};
-    // IndexSet is available for custom policy implementations
-    pub use indexmap::IndexSet;
-}

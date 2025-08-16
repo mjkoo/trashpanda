@@ -1,9 +1,12 @@
-use crate::error::BanditError;
-use crate::policies::{LinUcb, Policy};
-use indexmap::IndexSet;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
+
+use indexmap::IndexSet;
+
+use crate::contextual::linucb::LinUcb;
+use crate::error::BanditError;
+use crate::policy::Policy;
 
 /// A multi-armed bandit with a specific policy
 ///
@@ -194,6 +197,57 @@ where
     /// Gets the available arms
     pub fn arms(&self) -> &IndexSet<A> {
         &self.arms
+    }
+
+    /// Get an iterator over the available arms
+    ///
+    /// This provides a more idiomatic Rust way to iterate over arms without
+    /// exposing the underlying IndexSet type.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use trashpanda::{Bandit, simple::random::Random};
+    /// let bandit = Bandit::new(vec!["A", "B", "C"], Random::default()).unwrap();
+    ///
+    /// for arm in bandit.arms_iter() {
+    ///     println!("Arm: {}", arm);
+    /// }
+    /// ```
+    pub fn arms_iter(&self) -> impl Iterator<Item = &A> + '_ {
+        self.arms.iter()
+    }
+
+    /// Get the number of available arms
+    ///
+    /// This is equivalent to `bandit.arms().len()` but doesn't require
+    /// accessing the underlying IndexSet.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use trashpanda::{Bandit, simple::random::Random};
+    /// let bandit = Bandit::new(vec!["A", "B", "C"], Random::default()).unwrap();
+    /// assert_eq!(bandit.arms_len(), 3);
+    /// ```
+    pub fn arms_len(&self) -> usize {
+        self.arms.len()
+    }
+
+    /// Get an arm by its index position
+    ///
+    /// Returns the arm at the given index, or None if the index is out of bounds.
+    /// This preserves the O(1) indexed access that's important for random selection
+    /// algorithms without exposing the IndexSet type.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use trashpanda::{Bandit, simple::random::Random};
+    /// let bandit = Bandit::new(vec!["A", "B", "C"], Random::default()).unwrap();
+    /// assert_eq!(bandit.get_arm_by_index(0), Some(&"A"));
+    /// assert_eq!(bandit.get_arm_by_index(1), Some(&"B"));
+    /// assert_eq!(bandit.get_arm_by_index(10), None);
+    /// ```
+    pub fn get_arm_by_index(&self, index: usize) -> Option<&A> {
+        self.arms.get_index(index)
     }
 
     /// Check if an arm exists in the bandit
@@ -410,7 +464,7 @@ where
 }
 
 // Convenience constructors for common policies
-impl<A> Bandit<A, crate::policies::EpsilonGreedy<A>, ()>
+impl<A> Bandit<A, crate::simple::epsilon_greedy::EpsilonGreedy<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -419,11 +473,14 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        Self::new(arms, crate::policies::EpsilonGreedy::new(epsilon))
+        Self::new(
+            arms,
+            crate::simple::epsilon_greedy::EpsilonGreedy::new(epsilon),
+        )
     }
 }
 
-impl<A> Bandit<A, crate::policies::Random<A>, ()>
+impl<A> Bandit<A, crate::simple::random::Random<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -432,11 +489,11 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        Self::new(arms, crate::policies::Random::default())
+        Self::new(arms, crate::simple::random::Random::default())
     }
 }
 
-impl<A> Bandit<A, crate::policies::Ucb<A>, ()>
+impl<A> Bandit<A, crate::simple::ucb::Ucb<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -445,11 +502,11 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        Self::new(arms, crate::policies::Ucb::new(alpha))
+        Self::new(arms, crate::simple::ucb::Ucb::new(alpha))
     }
 }
 
-impl<A> Bandit<A, crate::policies::ThompsonSampling<A>, ()>
+impl<A> Bandit<A, crate::simple::thompson::ThompsonSampling<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -458,11 +515,11 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        Self::new(arms, crate::policies::ThompsonSampling::new())
+        Self::new(arms, crate::simple::thompson::ThompsonSampling::new())
     }
 }
 
-impl<A> Bandit<A, crate::policies::LinUcb<A>, &[f64]>
+impl<A> Bandit<A, crate::contextual::linucb::LinUcb<A>, &[f64]>
 where
     A: Clone + Eq + Hash,
 {
@@ -478,7 +535,7 @@ where
     {
         Self::new(
             arms,
-            crate::policies::LinUcb::new(alpha, l2_lambda, num_features),
+            crate::contextual::linucb::LinUcb::new(alpha, l2_lambda, num_features),
         )
     }
 }
@@ -552,7 +609,7 @@ impl<A, P, C> Bandit<A, P, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::policies::Random;
+    use crate::simple::random::Random;
     use rand::SeedableRng;
 
     #[test]
@@ -816,5 +873,51 @@ mod tests {
 
         // Different contexts should potentially give different expectations
         // (though this is not guaranteed depending on the training data)
+    }
+
+    #[test]
+    fn test_convenience_methods() {
+        let bandit = Bandit::new(vec!["A", "B", "C"], Random::default()).unwrap();
+
+        // Test arms_len
+        assert_eq!(bandit.arms_len(), 3);
+        assert_eq!(bandit.arms_len(), bandit.arms().len());
+
+        // Test get_arm_by_index
+        assert_eq!(bandit.get_arm_by_index(0), Some(&"A"));
+        assert_eq!(bandit.get_arm_by_index(1), Some(&"B"));
+        assert_eq!(bandit.get_arm_by_index(2), Some(&"C"));
+        assert_eq!(bandit.get_arm_by_index(3), None);
+
+        // Test arms_iter
+        let arms_vec: Vec<&str> = bandit.arms_iter().copied().collect();
+        assert_eq!(arms_vec, vec!["A", "B", "C"]);
+
+        // Verify iter gives same results as IndexSet iter
+        let original_iter: Vec<&str> = bandit.arms().iter().copied().collect();
+        assert_eq!(arms_vec, original_iter);
+    }
+
+    #[test]
+    fn test_convenience_methods_with_mutations() {
+        let mut bandit = Bandit::new(vec![1, 2, 3], Random::default()).unwrap();
+
+        // Initial state
+        assert_eq!(bandit.arms_len(), 3);
+        assert_eq!(bandit.get_arm_by_index(1), Some(&2));
+
+        // Add arm
+        bandit.add_arm(4).unwrap();
+        assert_eq!(bandit.arms_len(), 4);
+        assert_eq!(bandit.get_arm_by_index(3), Some(&4));
+
+        // Remove arm
+        bandit.remove_arm(&2).unwrap();
+        assert_eq!(bandit.arms_len(), 3);
+
+        // Check iterator after mutations
+        let arms_vec: Vec<i32> = bandit.arms_iter().copied().collect();
+        assert!(!arms_vec.contains(&2));
+        assert!(arms_vec.contains(&4));
     }
 }

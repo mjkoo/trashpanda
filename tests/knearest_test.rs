@@ -1,7 +1,8 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use trashpanda::Bandit;
-use trashpanda::policies::{KNearest, LinGreedy, Policy};
+use trashpanda::{
+    Bandit, contextual::lingreedy::LinGreedy, neighborhood::knearest::KNearest, policy::Policy,
+};
 
 #[test]
 fn test_knearest_basic() {

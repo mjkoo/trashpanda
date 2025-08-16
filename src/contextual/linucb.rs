@@ -1,10 +1,12 @@
-use crate::policies::Policy;
-use crate::regression::RidgeRegression;
+use std::collections::HashMap;
+use std::hash::Hash;
+
 use approx::abs_diff_eq;
 use indexmap::IndexSet;
 use rand::prelude::*;
-use std::collections::HashMap;
-use std::hash::Hash;
+
+use crate::policy::Policy;
+use crate::regression::RidgeRegression;
 
 /// Linear Upper Confidence Bound (LinUCB) policy for contextual bandits
 ///

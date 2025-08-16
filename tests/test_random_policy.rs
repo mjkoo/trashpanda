@@ -1,8 +1,7 @@
 use approx::{abs_diff_eq, assert_abs_diff_eq};
 use rand::SeedableRng;
 use std::collections::HashMap;
-use trashpanda::Bandit;
-use trashpanda::policies::Random;
+use trashpanda::{Bandit, simple::random::Random};
 
 #[test]
 fn test_random_policy_basic() {

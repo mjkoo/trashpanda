@@ -1,11 +1,13 @@
-use crate::policies::Policy;
-use crate::regression::RidgeRegression;
+use std::collections::HashMap;
+use std::hash::Hash;
+
 use indexmap::IndexSet;
 use nalgebra::DVector;
 use rand::prelude::*;
 use rand_distr::{Distribution, Normal};
-use std::collections::HashMap;
-use std::hash::Hash;
+
+use crate::policy::Policy;
+use crate::regression::RidgeRegression;
 
 /// Linear Thompson Sampling (LinTS) policy for contextual bandits
 ///
