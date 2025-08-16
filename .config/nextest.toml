@@ -1,18 +1,12 @@
-# Nextest configuration for TrashPanda
-
 [profile.default]
-# Default settings
 retries = { backoff = "exponential", count = 2, delay = "1s" }
 
 [profile.ci]
-# CI-specific configuration
 fail-fast = false
 failure-output = "immediate-final"
 success-output = "never"
 status-level = "skip"
 
 [profile.ci.junit]
-# Store JUnit XML in a standard location for CI
 path = "junit.xml"
-# Report name for JUnit XML
 report-name = "trashpanda-tests"

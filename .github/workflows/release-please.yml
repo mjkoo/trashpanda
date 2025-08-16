@@ -19,6 +19,7 @@ jobs:
         id: release
         with:
           release-type: rust
+
       # The logic below handles the crates.io publication
       - name: Checkout
         if: ${{ steps.release.outputs.release_created }}
