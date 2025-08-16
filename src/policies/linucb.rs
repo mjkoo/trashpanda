@@ -1,4 +1,3 @@
-use crate::error::{PolicyError, PolicyResult};
 use crate::policies::Policy;
 use crate::ridge::RidgeRegression;
 use indexmap::IndexSet;
@@ -64,58 +63,29 @@ where
     }
 }
 
-impl<A> Policy<A> for LinUcb<A>
+impl<A, C> Policy<A, C> for LinUcb<A>
 where
     A: Clone + Eq + Hash,
+    C: AsRef<[f64]>,
 {
-    // LinUCB is a contextual policy, these methods return errors
-    fn update(&mut self, _decisions: &[A], _rewards: &[f64]) {
-        // LinUCB requires context, this method should not be called
+    fn update(&mut self, decision: &A, context: &C, reward: f64) {
+        let model = self.get_or_create_model(decision);
+        model.fit(context.as_ref(), reward);
     }
 
-    fn select(&self, _arms: &IndexSet<A>, _rng: &mut dyn rand::RngCore) -> Option<A> {
-        // LinUCB requires context, this method should not be called
-        None
-    }
-
-    fn expectations(&self, _arms: &IndexSet<A>) -> HashMap<A, f64> {
-        // LinUCB requires context, this method should not be called
-        HashMap::new()
-    }
-
-    // LinUCB implements the contextual methods
-    fn update_with_context(
-        &mut self,
-        decisions: &[A],
-        contexts: Option<&[Vec<f64>]>,
-        rewards: &[f64],
-    ) -> PolicyResult<()> {
-        let contexts = contexts.ok_or(PolicyError::ContextRequired)?;
-        for ((arm, context), reward) in decisions.iter().zip(contexts).zip(rewards) {
-            let model = self.get_or_create_model(arm);
-            model.fit(context, *reward);
-        }
-        Ok(())
-    }
-
-    fn select_with_context(
-        &self,
-        arms: &IndexSet<A>,
-        context: Option<&[f64]>,
-        rng: &mut dyn rand::RngCore,
-    ) -> PolicyResult<Option<A>> {
-        let context = context.ok_or(PolicyError::ContextRequired)?;
-
+    fn select(&self, arms: &IndexSet<A>, context: &C, rng: &mut dyn rand::RngCore) -> Option<A> {
         if arms.is_empty() {
-            return Ok(None);
+            return None;
         }
+
+        let features = context.as_ref();
 
         // Calculate UCB for each arm
         let mut best_arms = Vec::new();
         let mut best_ucb = f64::NEG_INFINITY;
 
         for arm in arms {
-            let ucb = self.calculate_ucb(arm, context);
+            let ucb = self.calculate_ucb(arm, features);
 
             if (ucb - best_ucb).abs() < 1e-10 {
                 // Tie - add to best arms
@@ -129,28 +99,23 @@ where
         }
 
         // Break ties randomly
-        Ok(best_arms.choose(rng).cloned())
+        best_arms.choose(rng).cloned()
     }
 
-    fn expectations_with_context(
-        &self,
-        arms: &IndexSet<A>,
-        context: Option<&[f64]>,
-    ) -> PolicyResult<HashMap<A, f64>> {
-        let context = context.ok_or(PolicyError::ContextRequired)?;
-
+    fn expectations(&self, arms: &IndexSet<A>, context: &C) -> HashMap<A, f64> {
         let mut expectations = HashMap::new();
+        let features = context.as_ref();
 
         for arm in arms {
             if let Some(model) = self.arm_models.get(arm) {
-                expectations.insert(arm.clone(), model.predict(context));
+                expectations.insert(arm.clone(), model.predict(features));
             } else {
                 // Uninitialized arms get zero expectation
                 expectations.insert(arm.clone(), 0.0);
             }
         }
 
-        Ok(expectations)
+        expectations
     }
 
     fn reset_arm(&mut self, arm: &A) {
@@ -162,14 +127,6 @@ where
     fn reset(&mut self) {
         self.arm_models.clear();
     }
-
-    fn requires_context(&self) -> bool {
-        true
-    }
-
-    fn num_features(&self) -> usize {
-        self.num_features
-    }
 }
 
 #[cfg(test)]
@@ -180,7 +137,7 @@ mod tests {
     #[test]
     fn test_linucb_creation() {
         let policy: LinUcb<&str> = LinUcb::new(1.0, 1.0, 3);
-        assert_eq!(policy.num_features(), 3);
+        assert_eq!(policy.num_features, 3);
     }
 
     #[test]
@@ -191,9 +148,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
 
         // Should select from uninitialized arms
-        let selected = policy
-            .select_with_context(&arms, Some(&context), &mut rng)
-            .unwrap();
+        let selected = policy.select(&arms, &context, &mut rng);
         assert!(selected.is_some());
         assert!(arms.contains(&selected.unwrap()));
     }
@@ -204,19 +159,13 @@ mod tests {
         let arms = IndexSet::from(["a", "b"]);
 
         // Train with some data
-        let decisions = vec!["a", "a", "b"];
-        let contexts = vec![vec![1.0, 0.0], vec![0.8, 0.2], vec![0.0, 1.0]];
-        let rewards = vec![1.0, 0.8, 0.2];
-
-        policy
-            .update_with_context(&decisions, Some(&contexts), &rewards)
-            .unwrap();
+        policy.update(&"a", &[1.0, 0.0], 1.0);
+        policy.update(&"a", &[0.8, 0.2], 0.8);
+        policy.update(&"b", &[0.0, 1.0], 0.2);
 
         // Check expectations
         let context = vec![1.0, 0.0];
-        let expectations = policy
-            .expectations_with_context(&arms, Some(&context))
-            .unwrap();
+        let expectations = policy.expectations(&arms, &context);
 
         // Arm "a" should have higher expectation for context [1.0, 0.0]
         assert!(expectations[&"a"] > expectations[&"b"]);
@@ -227,17 +176,14 @@ mod tests {
         let mut policy: LinUcb<i32> = LinUcb::new(1.0, 1.0, 2);
 
         // Train with some data
-        policy
-            .update_with_context(&[1], Some(&[vec![1.0, 0.0]]), &[1.0])
-            .unwrap();
+        policy.update(&1, &[1.0, 0.0], 1.0);
 
         // Reset and check that model is cleared
-        policy.reset();
+        <LinUcb<i32> as Policy<i32, Vec<f64>>>::reset(&mut policy);
 
         let arms = IndexSet::from([1, 2]);
-        let expectations = policy
-            .expectations_with_context(&arms, Some(&[1.0, 0.0]))
-            .unwrap();
+        let context = vec![1.0, 0.0];
+        let expectations = policy.expectations(&arms, &context);
 
         // After reset, all arms should have zero expectation
         assert_eq!(expectations[&1], 0.0);
@@ -252,18 +198,14 @@ mod tests {
 
         // Train "exploit" arm to have high reward
         for _ in 0..10 {
-            policy
-                .update_with_context(&["exploit"], Some(&[vec![1.0, 0.0]]), &[1.0])
-                .unwrap();
+            policy.update(&"exploit", &[1.0, 0.0], 1.0);
         }
 
         // Even with high reward for "exploit", should sometimes explore
         let mut selections = HashMap::new();
+        let context = vec![1.0, 0.0];
         for _ in 0..100 {
-            let selected = policy
-                .select_with_context(&arms, Some(&[1.0, 0.0]), &mut rng)
-                .unwrap()
-                .unwrap();
+            let selected = policy.select(&arms, &context, &mut rng).unwrap();
             *selections.entry(selected).or_insert(0) += 1;
         }
 

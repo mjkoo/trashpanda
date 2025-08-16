@@ -5,19 +5,22 @@ use crate::policies::Policy;
 use indexmap::IndexSet;
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 /// Bandit that handles both contextual and context-free scenarios
-pub struct Bandit<A, P> {
+pub struct Bandit<A, P, C = ()> {
     /// Available arms
     arms: IndexSet<A>,
     /// The policy (now unified)
     policy: P,
+    /// Phantom data for context type
+    _phantom: PhantomData<fn() -> C>,
 }
 
-impl<A, P> Bandit<A, P>
+impl<A, P, C> Bandit<A, P, C>
 where
     A: Clone + Eq + Hash,
-    P: Policy<A>,
+    P: Policy<A, C>,
 {
     /// Create a new bandit
     pub fn new<I>(arms: I, policy: P) -> Result<Self, BanditError>
@@ -30,138 +33,59 @@ where
             return Err(BanditError::NoArmsAvailable);
         }
 
-        Ok(Self { arms, policy })
+        Ok(Self {
+            arms,
+            policy,
+            _phantom: PhantomData,
+        })
     }
 
-    /// Fit the bandit with training data (context-free version)
-    pub fn fit(&mut self, decisions: &[A], rewards: &[f64]) -> Result<(), BanditError> {
-        if self.policy.requires_context() {
-            return Err(BanditError::DimensionMismatch {
-                message: "This bandit requires context features. Use fit_with_context() instead."
-                    .to_string(),
-            });
-        }
-
-        self.validate_decisions(decisions)?;
-        self.policy.update(decisions, rewards);
-        Ok(())
-    }
-
-    /// Incrementally fit the bandit (alias for fit in context-free case)
-    pub fn partial_fit(&mut self, decisions: &[A], rewards: &[f64]) -> Result<(), BanditError> {
-        self.fit(decisions, rewards)
-    }
-
-    /// Fit the bandit with training data (contextual version)
-    pub fn fit_with_context(
+    /// Fit the bandit with training data (batch update)
+    pub fn fit(
         &mut self,
         decisions: &[A],
-        contexts: &[Vec<f64>],
+        context: &C,
         rewards: &[f64],
     ) -> Result<(), BanditError> {
-        if !self.policy.requires_context() {
-            // Allow using context API with context-free policies (just ignore context)
-            return self.fit(decisions, rewards);
-        }
-
-        self.validate_decisions(decisions)?;
-        self.validate_contexts(contexts)?;
-
-        if decisions.len() != contexts.len() || decisions.len() != rewards.len() {
+        if decisions.len() != rewards.len() {
             return Err(BanditError::DimensionMismatch {
                 message: format!(
-                    "Mismatched dimensions: decisions={}, contexts={}, rewards={}",
+                    "Mismatched dimensions: decisions={}, rewards={}",
                     decisions.len(),
-                    contexts.len(),
                     rewards.len()
                 ),
             });
         }
 
-        self.policy
-            .update_with_context(decisions, Some(contexts), rewards)?;
+        self.validate_decisions(decisions)?;
+
+        // Call update() for each decision-reward pair
+        for (decision, reward) in decisions.iter().zip(rewards) {
+            self.policy.update(decision, context, *reward);
+        }
         Ok(())
     }
 
-    /// Make a prediction (context-free version)
-    pub fn predict(&self, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
-        if self.policy.requires_context() {
-            return Err(BanditError::DimensionMismatch {
-                message:
-                    "This bandit requires context features. Use predict_with_context() instead."
-                        .to_string(),
-            });
-        }
+    /// Incrementally fit the bandit (alias for fit)
+    pub fn partial_fit(
+        &mut self,
+        decisions: &[A],
+        context: &C,
+        rewards: &[f64],
+    ) -> Result<(), BanditError> {
+        self.fit(decisions, context, rewards)
+    }
 
+    /// Make a prediction
+    pub fn predict(&self, context: &C, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
         self.policy
-            .select(&self.arms, rng)
+            .select(&self.arms, context, rng)
             .ok_or(BanditError::NoArmsAvailable)
     }
 
-    /// Make a prediction (contextual version)
-    pub fn predict_with_context(
-        &self,
-        context: &[f64],
-        rng: &mut dyn rand::RngCore,
-    ) -> Result<A, BanditError> {
-        if !self.policy.requires_context() {
-            // Allow using context API with context-free policies (just ignore context)
-            return self.predict(rng);
-        }
-
-        if context.len() != self.policy.num_features() {
-            return Err(BanditError::DimensionMismatch {
-                message: format!(
-                    "Context has {} features, expected {}",
-                    context.len(),
-                    self.policy.num_features()
-                ),
-            });
-        }
-
-        self.policy
-            .select_with_context(&self.arms, Some(context), rng)?
-            .ok_or(BanditError::NoArmsAvailable)
-    }
-
-    /// Get expected rewards (context-free version)
-    pub fn predict_expectations(&self) -> HashMap<A, f64> {
-        self.policy.expectations(&self.arms)
-    }
-
-    /// Get expected rewards (contextual version)
-    pub fn predict_expectations_with_context(
-        &self,
-        context: &[f64],
-    ) -> Result<HashMap<A, f64>, BanditError> {
-        if !self.policy.requires_context() {
-            // Allow using context API with context-free policies (just ignore context)
-            return Ok(self.predict_expectations());
-        }
-
-        if context.len() != self.policy.num_features() {
-            return Err(BanditError::DimensionMismatch {
-                message: format!(
-                    "Context has {} features, expected {}",
-                    context.len(),
-                    self.policy.num_features()
-                ),
-            });
-        }
-
-        Ok(self
-            .policy
-            .expectations_with_context(&self.arms, Some(context))?)
-    }
-
-    /// Check if this bandit requires context
-    pub fn requires_context(&self) -> bool {
-        self.policy.requires_context()
-    }
-
-    /// Get the number of features expected
-    pub fn num_features(&self) -> usize {
-        self.policy.num_features()
+    /// Get expected rewards
+    pub fn predict_expectations(&self, context: &C) -> HashMap<A, f64> {
+        self.policy.expectations(&self.arms, context)
     }
 
     // Helper methods
@@ -169,22 +93,6 @@ where
         for decision in decisions {
             if !self.arms.contains(decision) {
                 return Err(BanditError::ArmNotFound);
-            }
-        }
-        Ok(())
-    }
-
-    fn validate_contexts(&self, contexts: &[Vec<f64>]) -> Result<(), BanditError> {
-        let expected_features = self.policy.num_features();
-        for context in contexts {
-            if context.len() != expected_features {
-                return Err(BanditError::DimensionMismatch {
-                    message: format!(
-                        "Context has {} features, expected {}",
-                        context.len(),
-                        expected_features
-                    ),
-                });
             }
         }
         Ok(())
@@ -224,8 +132,64 @@ where
     }
 }
 
+// Convenience methods for non-contextual policies
+impl<A, P> Bandit<A, P, ()>
+where
+    A: Clone + Eq + Hash,
+    P: Policy<A, ()>,
+{
+    /// Convenience fit method for non-contextual policies
+    pub fn fit_simple(&mut self, decisions: &[A], rewards: &[f64]) -> Result<(), BanditError> {
+        self.fit(decisions, &(), rewards)
+    }
+
+    /// Convenience predict method for non-contextual policies  
+    pub fn predict_simple(&self, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
+        self.predict(&(), rng)
+    }
+
+    /// Convenience method to get expectations for non-contextual policies
+    pub fn predict_expectations_simple(&self) -> HashMap<A, f64> {
+        self.predict_expectations(&())
+    }
+}
+
+// Special batch method for LinUCB bandits with multiple contexts
+impl<A, C> Bandit<A, crate::policies::LinUcb<A>, C>
+where
+    A: Clone + Eq + Hash,
+    C: AsRef<[f64]>,
+{
+    /// Fit with multiple contexts (one per decision)
+    pub fn fit_batch<T: AsRef<[f64]>>(
+        &mut self,
+        decisions: &[A],
+        contexts: &[T],
+        rewards: &[f64],
+    ) -> Result<(), BanditError> {
+        if decisions.len() != contexts.len() || decisions.len() != rewards.len() {
+            return Err(BanditError::DimensionMismatch {
+                message: format!(
+                    "Mismatched dimensions: decisions={}, contexts={}, rewards={}",
+                    decisions.len(),
+                    contexts.len(),
+                    rewards.len()
+                ),
+            });
+        }
+
+        self.validate_decisions(decisions)?;
+
+        // Update each decision with its corresponding context
+        for ((decision, ctx), reward) in decisions.iter().zip(contexts).zip(rewards) {
+            self.policy.update(decision, ctx, *reward);
+        }
+        Ok(())
+    }
+}
+
 // Convenience constructors for common policies
-impl<A> Bandit<A, crate::policies::EpsilonGreedy<A>>
+impl<A> Bandit<A, crate::policies::EpsilonGreedy<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -239,7 +203,7 @@ where
     }
 }
 
-impl<A> Bandit<A, crate::policies::Random>
+impl<A> Bandit<A, crate::policies::Random, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -253,7 +217,7 @@ where
     }
 }
 
-impl<A> Bandit<A, crate::policies::Ucb<A>>
+impl<A> Bandit<A, crate::policies::Ucb<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -267,7 +231,7 @@ where
     }
 }
 
-impl<A> Bandit<A, crate::policies::ThompsonSampling<A>>
+impl<A> Bandit<A, crate::policies::ThompsonSampling<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -281,9 +245,10 @@ where
     }
 }
 
-impl<A> Bandit<A, crate::policies::LinUcb<A>>
+impl<A, C> Bandit<A, crate::policies::LinUcb<A>, C>
 where
     A: Clone + Eq + Hash,
+    C: AsRef<[f64]>,
 {
     /// Create a LinUCB bandit
     pub fn linucb<I>(
@@ -310,15 +275,12 @@ mod tests {
     fn test_context_free_bandit() {
         let mut bandit = Bandit::epsilon_greedy(vec!["a", "b", "c"], 0.1).unwrap();
 
-        assert!(!bandit.requires_context());
-        assert_eq!(bandit.num_features(), 0);
+        // Train without context using convenience method
+        bandit.fit_simple(&["a", "b"], &[1.0, 0.5]).unwrap();
 
-        // Train without context
-        bandit.fit(&["a", "b"], &[1.0, 0.5]).unwrap();
-
-        // Predict without context
+        // Predict without context using convenience method
         let mut rng = StdRng::seed_from_u64(42);
-        let choice = bandit.predict(&mut rng).unwrap();
+        let choice = bandit.predict_simple(&mut rng).unwrap();
         assert!(bandit.arms().contains(&choice));
     }
 
@@ -326,31 +288,26 @@ mod tests {
     fn test_contextual_bandit() {
         let mut bandit = Bandit::linucb(vec![1, 2, 3], 1.0, 1.0, 2).unwrap();
 
-        assert!(bandit.requires_context());
-        assert_eq!(bandit.num_features(), 2);
-
-        // Train with context
+        // Train with multiple contexts (batch)
         let contexts = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
-        bandit
-            .fit_with_context(&[1, 2], &contexts, &[1.0, 0.5])
-            .unwrap();
+        bandit.fit_batch(&[1, 2], &contexts, &[1.0, 0.5]).unwrap();
 
-        // Predict with context
+        // Predict with single context
         let mut rng = StdRng::seed_from_u64(42);
-        let choice = bandit.predict_with_context(&[0.5, 0.5], &mut rng).unwrap();
+        let context = vec![0.5, 0.5];
+        let choice = bandit.predict(&context, &mut rng).unwrap();
         assert!(bandit.arms().contains(&choice));
     }
 
     #[test]
-    fn test_context_free_can_use_context_api() {
+    fn test_context_free_can_use_simple_api() {
         let mut bandit = Bandit::epsilon_greedy(vec!["a", "b"], 0.1).unwrap();
 
-        // Context-free bandit can use context API (context is ignored)
-        let contexts = vec![vec![1.0, 0.0]];
-        bandit.fit_with_context(&["a"], &contexts, &[1.0]).unwrap();
+        // Context-free bandit uses simple API
+        bandit.fit_simple(&["a"], &[1.0]).unwrap();
 
         let mut rng = StdRng::seed_from_u64(42);
-        let choice = bandit.predict_with_context(&[0.5, 0.5], &mut rng).unwrap();
+        let choice = bandit.predict_simple(&mut rng).unwrap();
         assert!(bandit.arms().contains(&choice));
     }
 
@@ -358,11 +315,13 @@ mod tests {
     fn test_contextual_requires_context() {
         let mut bandit = Bandit::linucb(vec![1, 2], 1.0, 1.0, 2).unwrap();
 
-        // Trying to use context-free API should fail
-        assert!(bandit.fit(&[1], &[1.0]).is_err());
+        // Must provide context for contextual bandits - single update
+        let context = vec![1.0, 0.0];
+        bandit.fit(&[1], &context, &[1.0]).unwrap();
 
         let mut rng = StdRng::seed_from_u64(42);
-        assert!(bandit.predict(&mut rng).is_err());
+        let choice = bandit.predict(&context, &mut rng).unwrap();
+        assert!(bandit.arms().contains(&choice));
     }
 
     #[test]
@@ -379,38 +338,43 @@ mod tests {
 }
 
 /// Builder for creating bandits
-pub struct BanditBuilder<A, P> {
+pub struct BanditBuilder<A, P, C = ()> {
     arms: Option<Vec<A>>,
     policy: Option<P>,
+    _phantom: PhantomData<fn() -> C>,
 }
 
-impl<A, P> Default for BanditBuilder<A, P> {
+impl<A, P, C> Default for BanditBuilder<A, P, C> {
     fn default() -> Self {
         Self {
             arms: None,
             policy: None,
+            _phantom: PhantomData,
         }
     }
 }
 
-impl<A, P> BanditBuilder<A, P> {
+impl<A, P, C> BanditBuilder<A, P, C> {
     /// Set the arms
+    #[must_use = "builder method returns a new builder that should be used"]
     pub fn arms(mut self, arms: Vec<A>) -> Self {
         self.arms = Some(arms);
         self
     }
 
     /// Set the policy
+    #[must_use = "builder method returns a new builder that should be used"]
     pub fn policy(mut self, policy: P) -> Self {
         self.policy = Some(policy);
         self
     }
 
     /// Build the bandit
-    pub fn build(self) -> Result<Bandit<A, P>, BanditError>
+    #[must_use = "the builder should be used to create a bandit"]
+    pub fn build(self) -> Result<Bandit<A, P, C>, BanditError>
     where
         A: Clone + Eq + Hash,
-        P: Policy<A>,
+        P: Policy<A, C>,
     {
         let arms = self.arms.ok_or(BanditError::BuilderError {
             message: "Arms not specified".to_string(),
@@ -422,9 +386,9 @@ impl<A, P> BanditBuilder<A, P> {
     }
 }
 
-impl<A, P> Bandit<A, P> {
+impl<A, P, C> Bandit<A, P, C> {
     /// Create a new builder
-    pub fn builder() -> BanditBuilder<A, P> {
+    pub fn builder() -> BanditBuilder<A, P, C> {
         BanditBuilder::default()
     }
 }

@@ -4,8 +4,8 @@
 //! where the optimal arm depends on context features (e.g., user characteristics).
 
 use rand::thread_rng;
+use trashpanda::Bandit;
 use trashpanda::policies::LinUcb;
-use trashpanda::{Bandit, ContextualAdapter};
 
 fn main() {
     println!("=== LinUCB Contextual Bandit Example ===\n");
@@ -51,11 +51,12 @@ fn main() {
         ("tech", vec![1.0, 0.3, 0.4], 0.25),
     ];
 
-    for (content, context, reward) in &training_data {
-        bandit
-            .fit_with_context(&[content], &[context.clone()], &[*reward])
-            .unwrap();
-    }
+    // Convert to the format needed for fit_batch
+    let decisions: Vec<&str> = training_data.iter().map(|(d, _, _)| *d).collect();
+    let contexts: Vec<Vec<f64>> = training_data.iter().map(|(_, c, _)| c.clone()).collect();
+    let rewards: Vec<f64> = training_data.iter().map(|(_, _, r)| *r).collect();
+
+    bandit.fit_batch(&decisions, &contexts, &rewards).unwrap();
 
     println!("Trained on {} samples\n", training_data.len());
 
@@ -76,7 +77,7 @@ fn main() {
         println!("\n{} (context: {:?})", user_type, context);
 
         // Get expected rewards for each content type
-        let expectations = bandit.predict_expectations_with_context(&context).unwrap();
+        let expectations = bandit.predict_expectations(&context);
 
         println!("Expected rewards:");
         let mut sorted_expectations: Vec<_> = expectations.iter().collect();
@@ -87,7 +88,7 @@ fn main() {
         }
 
         // Make a prediction (includes exploration via UCB)
-        let recommendation = bandit.predict_with_context(&context, &mut rng).unwrap();
+        let recommendation = bandit.predict(&context, &mut rng).unwrap();
         println!("Recommendation: {}", recommendation);
     }
 
@@ -101,9 +102,7 @@ fn main() {
 
     let mut selections = std::collections::HashMap::new();
     for _ in 0..20 {
-        let choice = bandit
-            .predict_with_context(&uncertain_context, &mut rng)
-            .unwrap();
+        let choice = bandit.predict(&uncertain_context, &mut rng).unwrap();
         *selections.entry(choice).or_insert(0) += 1;
     }
 

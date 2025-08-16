@@ -13,7 +13,7 @@ pub type PolicyResult<T> = std::result::Result<T, PolicyError>;
 #[non_exhaustive]
 pub enum BanditError {
     /// The specified arm was not found in the bandit.
-    #[error("arm not found")]
+    #[error("arm not found in bandit")]
     ArmNotFound,
 
     /// The specified arm already exists in the bandit.
@@ -21,7 +21,7 @@ pub enum BanditError {
     ArmAlreadyExists,
 
     /// No arms are available in the bandit.
-    #[error("no arms available")]
+    #[error("no arms available for selection")]
     NoArmsAvailable,
 
     /// Mismatch in the dimensions of input data.
@@ -29,7 +29,7 @@ pub enum BanditError {
     DimensionMismatch { message: String },
 
     /// Builder configuration error.
-    #[error("builder error: {message}")]
+    #[error("builder configuration error: {message}")]
     BuilderError { message: String },
 
     /// Policy-related error.
@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn test_error_display() {
         let err = BanditError::ArmNotFound;
-        assert_eq!(err.to_string(), "arm not found");
+        assert_eq!(err.to_string(), "arm not found in bandit");
 
         let err = BanditError::DimensionMismatch {
             message: "context dimensions mismatch".to_string(),
@@ -70,6 +70,9 @@ mod tests {
         let err = BanditError::BuilderError {
             message: "invalid configuration".to_string(),
         };
-        assert_eq!(err.to_string(), "builder error: invalid configuration");
+        assert_eq!(
+            err.to_string(),
+            "builder configuration error: invalid configuration"
+        );
     }
 }

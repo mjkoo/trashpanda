@@ -1,5 +1,4 @@
 use super::Policy;
-use crate::error::{PolicyError, PolicyResult};
 use indexmap::IndexSet;
 use rand::{Rng, SeedableRng};
 use rand_distr::{Beta, Distribution};
@@ -84,6 +83,7 @@ where
     A: Clone + Eq + Hash,
 {
     /// Creates a new Thompson Sampling policy with default priors (uniform Beta(1,1))
+    #[must_use]
     pub fn new() -> Self {
         Self::with_prior(1.0, 1.0)
     }
@@ -93,6 +93,7 @@ where
     /// # Arguments
     /// * `prior_alpha` - Alpha parameter for Beta prior (must be positive)
     /// * `prior_beta` - Beta parameter for Beta prior (must be positive)
+    #[must_use]
     pub fn with_prior(prior_alpha: f64, prior_beta: f64) -> Self {
         assert!(prior_alpha > 0.0, "prior_alpha must be positive");
         assert!(prior_beta > 0.0, "prior_beta must be positive");
@@ -129,23 +130,21 @@ where
     }
 }
 
-impl<A> Policy<A> for ThompsonSampling<A>
+impl<A> Policy<A, ()> for ThompsonSampling<A>
 where
     A: Clone + Eq + Hash,
 {
-    fn update(&mut self, decisions: &[A], rewards: &[f64]) {
-        for (arm, &reward) in decisions.iter().zip(rewards.iter()) {
-            let stats = self.arm_stats.entry(arm.clone()).or_default();
+    fn update(&mut self, decision: &A, _context: &(), reward: f64) {
+        let stats = self.arm_stats.entry(decision.clone()).or_default();
 
-            // For continuous rewards in [0, 1], treat as probability of success
-            // This is a common approach for Thompson Sampling with continuous rewards
-            let reward_clamped = reward.clamp(0.0, 1.0);
-            stats.successes += reward_clamped;
-            stats.failures += 1.0 - reward_clamped;
-        }
+        // For continuous rewards in [0, 1], treat as probability of success
+        // This is a common approach for Thompson Sampling with continuous rewards
+        let reward_clamped = reward.clamp(0.0, 1.0);
+        stats.successes += reward_clamped;
+        stats.failures += 1.0 - reward_clamped;
     }
 
-    fn select(&self, arms: &IndexSet<A>, rng: &mut dyn rand::RngCore) -> Option<A> {
+    fn select(&self, arms: &IndexSet<A>, _context: &(), rng: &mut dyn rand::RngCore) -> Option<A> {
         if arms.is_empty() {
             return None;
         }
@@ -166,7 +165,7 @@ where
             .map(|(arm, _)| arm.clone())
     }
 
-    fn expectations(&self, arms: &IndexSet<A>) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>, _context: &()) -> HashMap<A, f64> {
         if arms.is_empty() {
             return HashMap::new();
         }
@@ -215,32 +214,6 @@ where
     fn reset(&mut self) {
         self.arm_stats.clear();
     }
-
-    fn update_with_context(
-        &mut self,
-        _decisions: &[A],
-        _contexts: Option<&[Vec<f64>]>,
-        _rewards: &[f64],
-    ) -> PolicyResult<()> {
-        Err(PolicyError::ContextNotSupported)
-    }
-
-    fn select_with_context(
-        &self,
-        _arms: &IndexSet<A>,
-        _context: Option<&[f64]>,
-        _rng: &mut dyn rand::RngCore,
-    ) -> PolicyResult<Option<A>> {
-        Err(PolicyError::ContextNotSupported)
-    }
-
-    fn expectations_with_context(
-        &self,
-        _arms: &IndexSet<A>,
-        _context: Option<&[f64]>,
-    ) -> PolicyResult<HashMap<A, f64>> {
-        Err(PolicyError::ContextNotSupported)
-    }
 }
 
 #[cfg(test)]
@@ -259,7 +232,8 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should select an arm (stochastic)
-        let choice = Policy::select(&policy, &arms, &mut rng as &mut dyn rand::RngCore).unwrap();
+        let choice =
+            Policy::select(&policy, &arms, &(), &mut rng as &mut dyn rand::RngCore).unwrap();
         assert!(arms.contains(&choice));
     }
 
@@ -273,13 +247,13 @@ mod tests {
 
         // Train with data where arm 2 is clearly the best
         for _ in 0..20 {
-            policy.update(&[1], &[0.2]);
-            policy.update(&[2], &[0.9]);
-            policy.update(&[3], &[0.3]);
+            policy.update(&1, &(), 0.2);
+            policy.update(&2, &(), 0.9);
+            policy.update(&3, &(), 0.3);
         }
 
         // Check expectations - arm 2 should have highest probability
-        let expectations = policy.expectations(&arms);
+        let expectations = policy.expectations(&arms, &());
         assert!(expectations[&2] > expectations[&1]);
         assert!(expectations[&2] > expectations[&3]);
     }
@@ -298,7 +272,8 @@ mod tests {
         arms.insert("y");
 
         // Train with similar rewards
-        policy.update(&["x", "y"], &[0.5, 0.5]);
+        policy.update(&"x", &(), 0.5);
+        policy.update(&"y", &(), 0.5);
 
         let mut rng1 = rand::rngs::StdRng::seed_from_u64(1);
         let mut rng2 = rand::rngs::StdRng::seed_from_u64(999);
@@ -307,10 +282,10 @@ mod tests {
         let mut choices = std::collections::HashSet::new();
         for _ in 0..10 {
             choices.insert(
-                Policy::select(&policy, &arms, &mut rng1 as &mut dyn rand::RngCore).unwrap(),
+                Policy::select(&policy, &arms, &(), &mut rng1 as &mut dyn rand::RngCore).unwrap(),
             );
             choices.insert(
-                Policy::select(&policy, &arms, &mut rng2 as &mut dyn rand::RngCore).unwrap(),
+                Policy::select(&policy, &arms, &(), &mut rng2 as &mut dyn rand::RngCore).unwrap(),
             );
         }
 
@@ -323,7 +298,9 @@ mod tests {
         let mut policy = ThompsonSampling::new();
 
         // Binary rewards (0 or 1)
-        policy.update(&[1, 1, 1], &[1.0, 0.0, 1.0]);
+        policy.update(&1, &(), 1.0);
+        policy.update(&1, &(), 0.0);
+        policy.update(&1, &(), 1.0);
 
         let stats = policy.arm_stats(&1).unwrap();
         assert_eq!(stats.0, 2.0); // successes
@@ -336,7 +313,8 @@ mod tests {
         let mut policy = ThompsonSampling::new();
 
         // Continuous rewards in [0, 1]
-        policy.update(&[1, 1], &[0.7, 0.3]);
+        policy.update(&1, &(), 0.7);
+        policy.update(&1, &(), 0.3);
 
         let stats = policy.arm_stats(&1).unwrap();
         assert_eq!(stats.0, 1.0); // successes = 0.7 + 0.3
@@ -348,7 +326,9 @@ mod tests {
     fn test_thompson_sampling_reset() {
         let mut policy = ThompsonSampling::new();
 
-        policy.update(&[1, 2, 3], &[0.5, 0.8, 0.3]);
+        policy.update(&1, &(), 0.5);
+        policy.update(&2, &(), 0.8);
+        policy.update(&3, &(), 0.3);
 
         // Reset specific arm
         policy.reset_arm(&2);
@@ -368,9 +348,11 @@ mod tests {
         arms.insert("b");
         arms.insert("c");
 
-        policy.update(&["a", "b", "c"], &[0.6, 0.4, 0.5]);
+        policy.update(&"a", &(), 0.6);
+        policy.update(&"b", &(), 0.4);
+        policy.update(&"c", &(), 0.5);
 
-        let expectations = policy.expectations(&arms);
+        let expectations = policy.expectations(&arms, &());
         let sum: f64 = expectations.values().sum();
         assert!((sum - 1.0).abs() < 0.01); // Should sum to approximately 1.0
     }
