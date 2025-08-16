@@ -58,15 +58,15 @@ jobs:
           cargo test --doc
 
       - name: Upload test results as artifact
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.rust }}
           path: target/nextest/ci/junit.xml
 
       - name: Upload test results to Codecov
-        if: matrix.rust == 'stable' && always()
-        uses: codecov/codecov-action@v5
+        if: ${{ !cancelled() && matrix.rust == 'stable' }}
+        uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: target/nextest/ci/junit.xml
