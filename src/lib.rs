@@ -38,7 +38,7 @@
 mod bandit;
 mod error;
 pub mod policies;
-mod ridge;
+mod regression;
 
 // Re-export main types
 pub use bandit::Bandit;

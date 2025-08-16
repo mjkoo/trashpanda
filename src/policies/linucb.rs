@@ -1,5 +1,5 @@
 use crate::policies::Policy;
-use crate::ridge::RidgeRegression;
+use crate::regression::RidgeRegression;
 use indexmap::IndexSet;
 use rand::prelude::*;
 use std::collections::HashMap;

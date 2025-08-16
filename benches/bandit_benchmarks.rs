@@ -57,7 +57,7 @@ fn bench_prediction(c: &mut Criterion) {
                 let bandit = Bandit::new(arms, Random).unwrap();
                 let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
-                b.iter(|| black_box(bandit.predict_with_rng(&mut rng).unwrap()));
+                b.iter(|| black_box(bandit.predict_simple(&mut rng).unwrap()));
             },
         );
 
@@ -72,11 +72,11 @@ fn bench_prediction(c: &mut Criterion) {
                 // Train with some data
                 let decisions: Vec<i32> = (0..100).map(|i| i % n).collect();
                 let rewards: Vec<f64> = (0..100).map(|i| (i as f64) / 100.0).collect();
-                bandit.fit(&decisions, &rewards).unwrap();
+                bandit.fit_simple(&decisions, &rewards).unwrap();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
-                b.iter(|| black_box(bandit.predict_with_rng(&mut rng).unwrap()));
+                b.iter(|| black_box(bandit.predict_simple(&mut rng).unwrap()));
             },
         );
 
@@ -91,9 +91,9 @@ fn bench_prediction(c: &mut Criterion) {
                 // Train with some data
                 let decisions: Vec<i32> = (0..100).map(|i| i % n).collect();
                 let rewards: Vec<f64> = (0..100).map(|i| (i as f64) / 100.0).collect();
-                bandit.fit(&decisions, &rewards).unwrap();
+                bandit.fit_simple(&decisions, &rewards).unwrap();
 
-                b.iter(|| black_box(bandit.predict_expectations().unwrap()));
+                b.iter(|| black_box(bandit.predict_expectations_simple()));
             },
         );
     }
@@ -112,7 +112,7 @@ fn bench_training(c: &mut Criterion) {
 
             b.iter_batched(
                 || Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap(),
-                |mut bandit| black_box(bandit.fit(&decisions, &rewards).unwrap()),
+                |mut bandit| black_box(bandit.fit_simple(&decisions, &rewards).unwrap()),
                 criterion::BatchSize::SmallInput,
             );
         });
@@ -138,7 +138,7 @@ fn bench_training(c: &mut Criterion) {
                             let end = ((i + 1) * batch_size).min(n);
                             black_box(
                                 bandit
-                                    .partial_fit(&decisions[start..end], &rewards[start..end])
+                                    .fit_simple(&decisions[start..end], &rewards[start..end])
                                     .unwrap(),
                             );
                         }

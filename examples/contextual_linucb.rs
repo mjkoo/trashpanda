@@ -3,7 +3,7 @@
 //! This example shows how to use LinUCB for contextual decision-making,
 //! where the optimal arm depends on context features (e.g., user characteristics).
 
-use rand::rng;
+use rand::{SeedableRng, rngs::StdRng};
 use trashpanda::Bandit;
 
 fn main() {
@@ -62,7 +62,7 @@ fn main() {
     // Testing phase: Make predictions for new users
     println!("--- Testing Phase ---");
 
-    let mut rng = rng();
+    let mut rng = StdRng::seed_from_u64(42);
 
     // Test contexts representing different user types
     let test_contexts = vec![
@@ -76,7 +76,7 @@ fn main() {
         println!("\n{} (context: {:?})", user_type, context);
 
         // Get expected rewards for each content type
-        let expectations = bandit.predict_expectations(context.as_slice());
+        let expectations = bandit.predict_expectations(&context[..]);
 
         println!("Expected rewards:");
         let mut sorted_expectations: Vec<_> = expectations.iter().collect();
@@ -87,7 +87,7 @@ fn main() {
         }
 
         // Make a prediction (includes exploration via UCB)
-        let recommendation = bandit.predict(context.as_slice(), &mut rng).unwrap();
+        let recommendation = bandit.predict(&context[..], &mut rng).unwrap();
         println!("Recommendation: {}", recommendation);
     }
 
@@ -101,9 +101,7 @@ fn main() {
 
     let mut selections = std::collections::HashMap::new();
     for _ in 0..20 {
-        let choice = bandit
-            .predict(uncertain_context.as_slice(), &mut rng)
-            .unwrap();
+        let choice = bandit.predict(&uncertain_context[..], &mut rng).unwrap();
         *selections.entry(choice).or_insert(0) += 1;
     }
 
