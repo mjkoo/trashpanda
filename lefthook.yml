@@ -1,6 +1,6 @@
 pre-commit:
   parallel: true
   commands:
-    rust:
+    pre-commit:
       glob: "*.rs"
-      run: cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings
+      run: just pre-commit

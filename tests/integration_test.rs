@@ -1,7 +1,9 @@
 //! Integration tests for core infrastructure.
 
-use trashpanda::policies::{EpsilonGreedy, Random};
-use trashpanda::prelude::*;
+use trashpanda::{
+    Bandit,
+    simple::{epsilon_greedy::EpsilonGreedy, random::Random},
+};
 
 #[test]
 fn test_basic_bandit_creation() {

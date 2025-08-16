@@ -1,7 +1,9 @@
-use super::Policy;
-use indexmap::IndexSet;
 use std::collections::HashMap;
 use std::hash::Hash;
+
+use indexmap::IndexSet;
+
+use crate::policy::Policy;
 
 /// Upper Confidence Bound (UCB1) policy
 ///

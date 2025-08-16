@@ -34,28 +34,33 @@ jobs:
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        if: matrix.rust == 'stable'
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        if: matrix.rust == 'stable'
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Build
-        run: cargo build
-
       - name: Install tools
         uses: taiki-e/install-action@v2
         with:
-          tool: nextest
+          tool: just,nextest,cargo-deny
+
+      - name: Check formatting
+        if: matrix.rust == 'stable'
+        run: just fmt-check
+
+      - name: Run Clippy
+        if: matrix.rust == 'stable'
+        run: just lint
+
+      - name: Run cargo deny
+        if: matrix.rust == 'stable'
+        run: just deny
+
+      - name: Build
+        run: just build
+
+      - name: Check documentation
+        if: matrix.rust == 'stable'
+        run: just docs-private
 
       - name: Run tests with JUnit output
         run: |
-          # Run all tests with nextest for JUnit output
-          cargo nextest run --profile ci
-          # Doc tests still require standard cargo test
-          cargo test --doc
+          just test "" ci
 
       - name: Upload test results as artifact
         if: ${{ !cancelled() }}
@@ -77,21 +82,11 @@ jobs:
       - name: Test examples
         if: matrix.rust == 'stable'
         run: |
-          if [ -d "examples" ]; then
-            for example_file in examples/*.rs; do
-              if [ -f "$example_file" ]; then
-                example=$(basename "$example_file" .rs)
-                echo "Running example: $example"
-                cargo run --example "$example"
-              fi
-            done
-          else
-            echo "No examples directory found"
-          fi
-
-      - name: Check documentation
-        if: matrix.rust == 'stable'
-        run: cargo doc --no-deps --document-private-items
+          echo "Testing all examples..."
+          for example in $(just example-list); do
+            echo "Running example: $example"
+            just example "$example"
+          done
 
   minimal-versions:
     name: Minimal Versions
@@ -110,31 +105,10 @@ jobs:
       - name: Install tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-hack,cargo-minimal-versions
+          tool: just,cargo-hack,cargo-minimal-versions
 
       - name: Check minimal versions
-        run: cargo minimal-versions check
-
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install tools
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-audit
-
-      - name: Run security audit
-        run: cargo audit
+        run: just minimal-versions
 
   benchmarks:
     name: Benchmarks
@@ -150,8 +124,13 @@ jobs:
       - name: Set up Rust cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
       - name: Run benchmarks
-        run: cargo bench --no-run
+        run: just bench
 
   coverage:
     name: Code Coverage
@@ -172,10 +151,10 @@ jobs:
       - name: Install tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-llvm-cov
+          tool: just,cargo-llvm-cov,nextest
 
       - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        run: just test-coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -203,9 +182,7 @@ jobs:
       - name: Install tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-msrv,nextest
+          tool: just,cargo-msrv,nextest
 
       - name: Verify MSRV
-        run: |
-          # cargo-msrv will use nextest if available for its test runs
-          cargo msrv verify
+        run: just msrv

@@ -11,8 +11,10 @@ categories = ["algorithms", "science"]
 
 [dependencies]
 approx = "0.5"
+faer = "0.22.6"
+faer-ext = { version = "0.6.0", features = ["ndarray"] }
 indexmap = "2.10.0"
-nalgebra = "0.34"
+ndarray = "0.16"
 ordered-float = "5.0"
 rand = "0.9"
 rand_distr = "0.5"

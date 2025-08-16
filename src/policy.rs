@@ -1,21 +1,8 @@
-pub mod epsilon_greedy;
-pub mod lingreedy;
-pub mod lints;
-pub mod linucb;
-pub mod random;
-pub mod thompson;
-pub mod ucb;
+//! Policy trait definition for multi-armed bandit algorithms
 
-pub use epsilon_greedy::EpsilonGreedy;
-pub use lingreedy::LinGreedy;
-pub use lints::LinTs;
-pub use linucb::LinUcb;
-pub use random::Random;
-pub use thompson::ThompsonSampling;
-pub use ucb::Ucb;
+use std::collections::HashMap;
 
 use indexmap::IndexSet;
-use std::collections::HashMap;
 
 /// Unified trait for both contextual and non-contextual bandit policies
 ///

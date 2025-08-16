@@ -1,6 +1,9 @@
 use rand::{Rng, SeedableRng};
 use std::collections::HashMap;
-use trashpanda::{Bandit, policies::*};
+use trashpanda::{
+    Bandit,
+    simple::{epsilon_greedy::EpsilonGreedy, random::Random, thompson::ThompsonSampling, ucb::Ucb},
+};
 
 fn main() {
     println!("TrashPanda: Multi-Armed Bandit Algorithm Comparison\n");

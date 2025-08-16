@@ -1,0 +1,46 @@
+[graph]
+all-features = true
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "Unicode-3.0"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+skip-tree = [
+    # Faer ecosystem uses older rand 0.8 ecosystem
+    { crate = "rand@0.8", reason = "faer uses older rand 0.8 ecosystem" },
+    { crate = "rand_distr@0.4", reason = "faer uses older rand 0.8 ecosystem" },
+    { crate = "getrandom@0.2", reason = "faer uses older rand 0.8 ecosystem" },
+    
+    # Faer ecosystem uses older equator versions
+    { crate = "equator@0.2", reason = "faer -> nano-gemm uses older equator version" },
+    
+    # Windows crates frequently bump versions
+    { crate = "windows-sys@0.42", reason = "faer -> spindle uses older windows ecosystem" },
+    
+    # Regex crates used by older tracing ecosystem  
+    { crate = "regex-automata@0.1", reason = "faer -> tracing-subscriber uses older regex ecosystem" },
+    { crate = "regex-syntax@0.6", reason = "faer -> tracing-subscriber uses older regex ecosystem" },
+    
+    # Syn and thiserror frequently bump versions
+    { crate = "syn@1", reason = "faer ecosystem uses older syn version" },
+    { crate = "thiserror@1", reason = "faer -> gemm-common uses older thiserror version" },
+    
+    # WASI older version from getrandom 0.2
+    { crate = "wasi@0.11", reason = "older getrandom uses older wasi version" },
+]
+
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0436", # paste crate unmaintained - used transitively by faer
+]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

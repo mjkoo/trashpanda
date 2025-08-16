@@ -1,9 +1,11 @@
-use super::Policy;
+use std::collections::HashMap;
+use std::hash::Hash;
+
 use indexmap::IndexSet;
 use rand::Rng;
 use rand_distr::{Beta, Distribution};
-use std::collections::HashMap;
-use std::hash::Hash;
+
+use crate::policy::Policy;
 
 /// Thompson Sampling policy using Beta distribution
 ///

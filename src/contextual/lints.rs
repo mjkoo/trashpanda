@@ -1,11 +1,12 @@
-use crate::policies::Policy;
-use crate::regression::RidgeRegression;
-use indexmap::IndexSet;
-use nalgebra::DVector;
-use rand::prelude::*;
-use rand_distr::{Distribution, Normal};
 use std::collections::HashMap;
 use std::hash::Hash;
+
+use indexmap::IndexSet;
+use rand::prelude::*;
+use rand_distr::{Distribution, Normal};
+
+use crate::policy::Policy;
+use crate::regression::RidgeRegression;
 
 /// Linear Thompson Sampling (LinTS) policy for contextual bandits
 ///
@@ -58,7 +59,6 @@ where
     fn sample_posterior(&self, arm: &A, context: &[f64], rng: &mut dyn RngCore) -> f64 {
         if let Some(model) = self.arm_models.get(arm) {
             // Sample beta from multivariate normal: N(beta_hat, v^2 * A_inv)
-            let x_vec = DVector::from_row_slice(context);
 
             // Sample perturbed beta coefficients
             let normal = Normal::new(0.0, 1.0).unwrap();
@@ -69,11 +69,15 @@ where
             for i in 0..self.num_features {
                 let noise = normal.sample(rng);
                 let variance = self.v * model.a_inv[(i, i)].sqrt();
-                beta_sample[i] += noise * variance;
+                beta_sample[(i, 0)] += noise * variance;
             }
 
-            // Return x^T * beta_sample
-            x_vec.dot(&beta_sample)
+            // Return x^T * beta_sample: manually compute dot product
+            let mut result = 0.0;
+            for i in 0..self.num_features {
+                result += context[i] * beta_sample[(i, 0)];
+            }
+            result
         } else {
             // Uninitialized arm - sample from prior with high variance
             let normal = Normal::new(0.0, self.v).unwrap();

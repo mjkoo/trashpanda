@@ -1,6 +1,10 @@
 use rand::prelude::*;
 use rand::rngs::StdRng;
-use trashpanda::prelude::*;
+use trashpanda::{
+    Bandit,
+    contextual::{lingreedy::LinGreedy, lints::LinTs, linucb::LinUcb},
+    policy::Policy,
+};
 
 /// Example demonstrating all three linear contextual bandit algorithms
 fn main() {
