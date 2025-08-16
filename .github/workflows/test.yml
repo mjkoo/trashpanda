@@ -37,7 +37,7 @@ jobs:
       - name: Install tools
         uses: taiki-e/install-action@v2
         with:
-          tool: just,nextest
+          tool: just,nextest,cargo-deny
 
       - name: Check formatting
         if: matrix.rust == 'stable'
@@ -46,6 +46,10 @@ jobs:
       - name: Run Clippy
         if: matrix.rust == 'stable'
         run: just lint
+
+      - name: Run cargo deny
+        if: matrix.rust == 'stable'
+        run: just deny
 
       - name: Build
         run: just build
@@ -105,27 +109,6 @@ jobs:
 
       - name: Check minimal versions
         run: just minimal-versions
-
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Set up Rust cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install tools
-        uses: taiki-e/install-action@v2
-        with:
-          tool: just,cargo-audit
-
-      - name: Run security audit
-        run: just audit
 
   benchmarks:
     name: Benchmarks

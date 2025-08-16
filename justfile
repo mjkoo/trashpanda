@@ -21,6 +21,9 @@ test-coverage:
 lint:
     cargo clippy --all-targets --all-features -- -D warnings
 
+deny:
+    cargo deny check
+
 lint-fix:
     cargo clippy --fix --allow-dirty --allow-staged --all-targets --all-features -- -D warnings
     cargo fmt
@@ -94,12 +97,6 @@ clean:
 
 update:
     cargo update
-
-audit:
-    cargo audit
-
-outdated:
-    cargo update --dry-run --verbose
 
 ci: fmt-check lint build docs-private build test
 
