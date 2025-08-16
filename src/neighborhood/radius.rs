@@ -7,11 +7,11 @@ use rand::RngCore;
 use crate::neighborhood::distance::{DistanceMetric, Euclidean};
 use crate::policy::Policy;
 
-/// K-Nearest Neighbors contextual policy wrapper
+/// Radius-based neighborhood contextual policy wrapper
 ///
-/// This policy uses k-nearest neighbors to select historical observations
-/// that are most similar to the current context, then trains an underlying
-/// policy on those observations to make predictions.
+/// This policy selects historical observations within a fixed radius
+/// of the current context, then trains an underlying policy on those
+/// observations to make predictions.
 ///
 /// # Type Parameters
 /// - `A`: The arm type
@@ -20,21 +20,23 @@ use crate::policy::Policy;
 ///
 /// # Example
 /// ```
-/// use trashpanda::{Bandit, contextual::lingreedy::LinGreedy, neighborhood::knearest::KNearest};
+/// use trashpanda::{Bandit, contextual::lingreedy::LinGreedy, neighborhood::radius::Radius};
 /// use trashpanda::neighborhood::distance::Euclidean;
 ///
 /// let underlying = LinGreedy::new(0.1, 1.0, 2); // contextual policy
-/// let policy = KNearest::new(underlying, 3, Euclidean);
+/// let policy = Radius::new(underlying, 0.5, Euclidean);
 /// let mut bandit = Bandit::new(vec!["arm1", "arm2"], policy).unwrap();
 /// ```
 #[derive(Clone)]
-pub struct KNearest<A, P, D = Euclidean> {
+pub struct Radius<A, P, D = Euclidean> {
     /// The underlying policy to train on neighbor data
     underlying_policy: P,
-    /// Number of nearest neighbors to use
-    k: usize,
+    /// Maximum distance radius for neighbors
+    radius: f64,
     /// Distance metric
     metric: D,
+    /// Minimum number of neighbors required (fallback to all if fewer)
+    min_neighbors: usize,
     /// Historical decisions
     decisions: Vec<A>,
     /// Historical rewards
@@ -43,63 +45,80 @@ pub struct KNearest<A, P, D = Euclidean> {
     contexts: Vec<Vec<f64>>,
 }
 
-impl<A, P, D> KNearest<A, P, D>
+impl<A, P, D> Radius<A, P, D>
 where
     A: Clone + Eq + Hash,
     P: for<'a> Policy<A, &'a [f64]> + Clone,
     D: DistanceMetric,
 {
-    /// Create a new KNearest policy
+    /// Create a new Radius policy
     ///
     /// # Arguments
     /// - `underlying_policy`: The policy to use for predictions based on neighbor data
-    /// - `k`: Number of nearest neighbors to consider
+    /// - `radius`: Maximum distance for neighbors
     /// - `metric`: Distance metric to use
     #[must_use]
-    pub fn new(underlying_policy: P, k: usize, metric: D) -> Self {
-        assert!(k > 0, "k must be greater than 0");
+    pub fn new(underlying_policy: P, radius: f64, metric: D) -> Self {
+        assert!(radius > 0.0, "radius must be greater than 0");
         Self {
             underlying_policy,
-            k,
+            radius,
             metric,
+            min_neighbors: 1,
             decisions: Vec::new(),
             rewards: Vec::new(),
             contexts: Vec::new(),
         }
     }
 
-    /// Create a new KNearest policy with default Euclidean distance
+    /// Create a new Radius policy with default Euclidean distance
     #[must_use]
-    pub fn euclidean(underlying_policy: P, k: usize) -> KNearest<A, P, Euclidean>
+    pub fn euclidean(underlying_policy: P, radius: f64) -> Radius<A, P, Euclidean>
     where
         Euclidean: DistanceMetric,
     {
-        KNearest::new(underlying_policy, k, Euclidean)
+        Radius::new(underlying_policy, radius, Euclidean)
     }
 
-    /// Find k nearest neighbors to the given context
+    /// Set the minimum number of neighbors required
+    #[must_use]
+    pub fn with_min_neighbors(mut self, min_neighbors: usize) -> Self {
+        self.min_neighbors = min_neighbors;
+        self
+    }
+
+    /// Find neighbors within radius of the given context
     fn find_neighbors(&self, context: &[f64]) -> Vec<usize> {
         if self.contexts.is_empty() {
             return Vec::new();
         }
 
-        // Calculate distances to all historical contexts
-        let mut distances: Vec<(usize, f64)> = self
+        // Find all contexts within the radius
+        let mut neighbors: Vec<usize> = self
             .contexts
             .iter()
             .enumerate()
-            .map(|(idx, hist_context)| (idx, self.metric.distance(hist_context, context)))
+            .filter_map(|(idx, hist_context)| {
+                let distance = self.metric.distance(hist_context, context);
+                if distance <= self.radius {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
             .collect();
 
-        // Sort by distance and take k nearest
-        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        // If we have fewer neighbors than the minimum required,
+        // fall back to using all historical data
+        if neighbors.len() < self.min_neighbors {
+            neighbors = (0..self.contexts.len()).collect();
+        }
 
-        let k = self.k.min(distances.len());
-        distances.into_iter().take(k).map(|(idx, _)| idx).collect()
+        neighbors
     }
 }
 
-impl<A, P, D> Policy<A, &[f64]> for KNearest<A, P, D>
+impl<A, P, D> Policy<A, &[f64]> for Radius<A, P, D>
 where
     A: Clone + Eq + Hash,
     P: for<'a> Policy<A, &'a [f64]> + Clone,
@@ -125,11 +144,11 @@ where
             return arms.get_index(idx).cloned();
         }
 
-        // Find k nearest neighbors
+        // Find neighbors within radius
         let neighbor_indices = self.find_neighbors(context);
 
         if neighbor_indices.is_empty() {
-            // No neighbors found (shouldn't happen), select randomly
+            // No neighbors found (shouldn't happen with fallback), select randomly
             if arms.is_empty() {
                 return None;
             }
@@ -171,7 +190,7 @@ where
                 .collect();
         }
 
-        // Find k nearest neighbors
+        // Find neighbors within radius
         let neighbor_indices = self.find_neighbors(context);
 
         if neighbor_indices.is_empty() {
@@ -224,5 +243,56 @@ where
         self.rewards.clear();
         self.contexts.clear();
         self.underlying_policy.reset();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contextual::lingreedy::LinGreedy;
+    use crate::neighborhood::distance::Euclidean;
+    use rand::SeedableRng;
+    use rand_xoshiro::Xoshiro256PlusPlus;
+
+    #[test]
+    fn test_radius_policy() {
+        let underlying: LinGreedy<&str> = LinGreedy::new(0.1, 1.0, 2);
+        let mut policy = Radius::new(underlying, 1.0, Euclidean);
+        let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+
+        let arms: IndexSet<&str> = ["A", "B", "C"].into_iter().collect();
+
+        // Train with some data
+        policy.update(&"A", &[0.0, 0.0], 1.0);
+        policy.update(&"B", &[1.0, 0.0], 0.5);
+        policy.update(&"C", &[0.0, 1.0], 0.7);
+
+        // Predict with a context close to [0, 0]
+        let context = vec![0.1, 0.1];
+        let selection = policy.select(&arms, &context, &mut rng);
+        assert!(selection.is_some());
+
+        // Predict with a context far from all training data
+        let far_context = vec![10.0, 10.0];
+        let selection_far = policy.select(&arms, &far_context, &mut rng);
+        assert!(selection_far.is_some()); // Should fallback to all data
+    }
+
+    #[test]
+    fn test_radius_with_min_neighbors() {
+        let underlying: LinGreedy<&str> = LinGreedy::new(0.1, 1.0, 2);
+        let mut policy = Radius::new(underlying, 0.5, Euclidean).with_min_neighbors(2);
+        let mut rng = Xoshiro256PlusPlus::seed_from_u64(42);
+
+        let arms: IndexSet<&str> = ["A", "B"].into_iter().collect();
+
+        // Train with some data
+        policy.update(&"A", &[0.0, 0.0], 1.0);
+        policy.update(&"B", &[5.0, 5.0], 0.5);
+
+        // Predict with a context close to only one point
+        let context = vec![0.1, 0.1];
+        let selection = policy.select(&arms, &context, &mut rng);
+        assert!(selection.is_some()); // Should use all data due to min_neighbors
     }
 }

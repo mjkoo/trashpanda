@@ -1,14 +1,20 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use trashpanda::{
-    Bandit, contextual::lingreedy::LinGreedy, neighborhood::knearest::KNearest, policy::Policy,
+    Bandit,
+    contextual::lingreedy::LinGreedy,
+    neighborhood::{
+        distance::{Cosine, Euclidean, Manhattan},
+        knearest::KNearest,
+    },
+    policy::Policy,
 };
 
 #[test]
 fn test_knearest_basic() {
     // Create KNearest with LinGreedy as underlying policy (contextual)
     let underlying = LinGreedy::new(0.1, 1.0, 2); // epsilon=0.1, l2_lambda=1.0, 2 features
-    let policy = KNearest::new(underlying, 2, "euclidean");
+    let policy = KNearest::new(underlying, 2, Euclidean);
 
     let mut bandit = Bandit::new(vec!["A", "B", "C"], policy).unwrap();
     let mut rng = StdRng::seed_from_u64(42);
@@ -57,7 +63,7 @@ fn test_knearest_basic() {
 #[test]
 fn test_knearest_empty_history() {
     let underlying = LinGreedy::new(0.1, 1.0, 2);
-    let policy = KNearest::new(underlying, 3, "manhattan");
+    let policy = KNearest::new(underlying, 3, Manhattan);
 
     let bandit = Bandit::new(vec![1, 2, 3], policy).unwrap();
     let mut rng = StdRng::seed_from_u64(42);
@@ -74,7 +80,7 @@ fn test_knearest_empty_history() {
 #[test]
 fn test_knearest_cosine_distance() {
     let underlying = LinGreedy::new(0.0, 1.0, 2); // Greedy for deterministic test
-    let policy = KNearest::new(underlying, 1, "cosine");
+    let policy = KNearest::new(underlying, 1, Cosine);
 
     let mut bandit = Bandit::new(vec!["X", "Y"], policy).unwrap();
     let mut rng = StdRng::seed_from_u64(42);
@@ -100,7 +106,7 @@ fn test_knearest_cosine_distance() {
 #[test]
 fn test_knearest_reset() {
     let underlying = LinGreedy::new(0.1, 1.0, 2);
-    let mut policy = KNearest::new(underlying, 2, "euclidean");
+    let mut policy = KNearest::new(underlying, 2, Euclidean);
 
     // Add some data
     let ctx1 = [1.0, 0.0];

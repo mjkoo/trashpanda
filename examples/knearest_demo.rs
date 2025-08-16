@@ -1,6 +1,10 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-use trashpanda::{Bandit, contextual::lingreedy::LinGreedy, neighborhood::knearest::KNearest};
+use trashpanda::{
+    Bandit,
+    contextual::lingreedy::LinGreedy,
+    neighborhood::{distance::Euclidean, knearest::KNearest},
+};
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     println!("K-Nearest Neighbors Contextual Bandit Demo");
@@ -8,7 +12,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     // Create a KNearest policy with LinGreedy as the underlying algorithm
     let underlying = LinGreedy::new(0.0, 1.0, 2); // epsilon=0 (pure greedy), 2 features
-    let policy = KNearest::new(underlying, 3, "euclidean"); // k=3 nearest neighbors
+    let policy = KNearest::new(underlying, 3, Euclidean); // k=3 nearest neighbors
 
     // Initialize bandit with three products
     let mut bandit = Bandit::new(vec!["Product A", "Product B", "Product C"], policy)?;
