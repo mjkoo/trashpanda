@@ -12,11 +12,11 @@ impl<A> Policy<A, ()> for Random
 where
     A: Clone + Eq + Hash,
 {
-    fn update(&mut self, _decision: &A, _context: &(), _reward: f64) {
+    fn update(&mut self, _decision: &A, _context: (), _reward: f64) {
         // Random policy doesn't learn from feedback
     }
 
-    fn select(&self, arms: &IndexSet<A>, _context: &(), rng: &mut dyn rand::RngCore) -> Option<A> {
+    fn select(&self, arms: &IndexSet<A>, _context: (), rng: &mut dyn rand::RngCore) -> Option<A> {
         if arms.is_empty() {
             return None;
         }
@@ -25,7 +25,7 @@ where
         arms.get_index(idx).cloned()
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, _context: &()) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>, _context: ()) -> HashMap<A, f64> {
         if arms.is_empty() {
             return HashMap::new();
         }
@@ -57,7 +57,7 @@ mod tests {
         arms.insert("c");
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
-        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
+        let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
         assert!(arms.contains(&choice));
     }
 
@@ -68,7 +68,7 @@ mod tests {
         arms.insert(1);
         arms.insert(2);
         arms.insert(3);
-        let expectations = policy.expectations(&arms, &());
+        let expectations = policy.expectations(&arms, ());
 
         assert_eq!(expectations.len(), 3);
         for (_arm, prob) in expectations {
@@ -82,7 +82,7 @@ mod tests {
         let arms: IndexSet<i32> = IndexSet::new();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
-        assert_eq!(Policy::select(&policy, &arms, &(), &mut rng), None);
-        assert_eq!(policy.expectations(&arms, &()).len(), 0);
+        assert_eq!(Policy::select(&policy, &arms, (), &mut rng), None);
+        assert_eq!(policy.expectations(&arms, ()).len(), 0);
     }
 }

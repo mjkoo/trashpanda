@@ -41,12 +41,10 @@ where
     }
 
     /// Fit the bandit with training data (batch update)
-    pub fn fit(
-        &mut self,
-        decisions: &[A],
-        context: &C,
-        rewards: &[f64],
-    ) -> Result<(), BanditError> {
+    pub fn fit(&mut self, decisions: &[A], context: C, rewards: &[f64]) -> Result<(), BanditError>
+    where
+        C: Copy,
+    {
         if decisions.len() != rewards.len() {
             return Err(BanditError::DimensionMismatch {
                 message: format!(
@@ -70,21 +68,24 @@ where
     pub fn partial_fit(
         &mut self,
         decisions: &[A],
-        context: &C,
+        context: C,
         rewards: &[f64],
-    ) -> Result<(), BanditError> {
+    ) -> Result<(), BanditError>
+    where
+        C: Copy,
+    {
         self.fit(decisions, context, rewards)
     }
 
     /// Make a prediction
-    pub fn predict(&self, context: &C, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
+    pub fn predict(&self, context: C, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
         self.policy
             .select(&self.arms, context, rng)
             .ok_or(BanditError::NoArmsAvailable)
     }
 
     /// Get expected rewards
-    pub fn predict_expectations(&self, context: &C) -> HashMap<A, f64> {
+    pub fn predict_expectations(&self, context: C) -> HashMap<A, f64> {
         self.policy.expectations(&self.arms, context)
     }
 
@@ -152,33 +153,35 @@ where
 {
     /// Fit without context for non-contextual bandits
     pub fn fit_simple(&mut self, decisions: &[A], rewards: &[f64]) -> Result<(), BanditError> {
-        self.fit(decisions, &(), rewards)
+        self.fit(decisions, (), rewards)
     }
 
     /// Predict without context for non-contextual bandits
     pub fn predict_simple(&self, rng: &mut dyn rand::RngCore) -> Result<A, BanditError> {
-        self.predict(&(), rng)
+        self.predict((), rng)
     }
 
     /// Get expectations without context for non-contextual bandits
     pub fn predict_expectations_simple(&self) -> HashMap<A, f64> {
-        self.predict_expectations(&())
+        self.predict_expectations(())
     }
 }
 
 // Batch operations for LinUCB
-impl<A, C> Bandit<A, LinUcb<A>, C>
+impl<A> Bandit<A, LinUcb<A>, &[f64]>
 where
     A: Clone + Eq + Hash,
-    C: AsRef<[f64]>,
 {
     /// Fit LinUCB with multiple contexts
-    pub fn fit_batch(
+    pub fn fit_batch<C>(
         &mut self,
         decisions: &[A],
         contexts: &[C],
         rewards: &[f64],
-    ) -> Result<(), BanditError> {
+    ) -> Result<(), BanditError>
+    where
+        C: AsRef<[f64]>,
+    {
         if decisions.len() != contexts.len() || decisions.len() != rewards.len() {
             return Err(BanditError::DimensionMismatch {
                 message: format!(
@@ -194,7 +197,7 @@ where
 
         // Update each decision with its corresponding context
         for ((decision, ctx), reward) in decisions.iter().zip(contexts).zip(rewards) {
-            self.policy.update(decision, ctx, *reward);
+            self.policy.update(decision, ctx.as_ref(), *reward);
         }
         Ok(())
     }
@@ -253,7 +256,7 @@ where
     }
 }
 
-impl<A> Bandit<A, crate::policies::LinUcb<A>, Vec<f64>>
+impl<A> Bandit<A, crate::policies::LinUcb<A>, &[f64]>
 where
     A: Clone + Eq + Hash,
 {
@@ -343,7 +346,7 @@ impl<A, P, C> Bandit<A, P, C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::policies::{EpsilonGreedy, Random};
+    use crate::policies::Random;
     use rand::SeedableRng;
 
     #[test]

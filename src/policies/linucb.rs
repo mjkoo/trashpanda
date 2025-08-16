@@ -63,22 +63,26 @@ where
     }
 }
 
-impl<A, C> Policy<A, C> for LinUcb<A>
+impl<A> Policy<A, &[f64]> for LinUcb<A>
 where
     A: Clone + Eq + Hash,
-    C: AsRef<[f64]>,
 {
-    fn update(&mut self, decision: &A, context: &C, reward: f64) {
+    fn update(&mut self, decision: &A, context: &[f64], reward: f64) {
         let model = self.get_or_create_model(decision);
-        model.fit(context.as_ref(), reward);
+        model.fit(context, reward);
     }
 
-    fn select(&self, arms: &IndexSet<A>, context: &C, rng: &mut dyn rand::RngCore) -> Option<A> {
+    fn select(
+        &self,
+        arms: &IndexSet<A>,
+        context: &[f64],
+        rng: &mut dyn rand::RngCore,
+    ) -> Option<A> {
         if arms.is_empty() {
             return None;
         }
 
-        let features = context.as_ref();
+        let features = context;
 
         // Calculate UCB for each arm
         let mut best_arms = Vec::new();
@@ -102,9 +106,9 @@ where
         best_arms.choose(rng).cloned()
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, context: &C) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>, context: &[f64]) -> HashMap<A, f64> {
         let mut expectations = HashMap::new();
-        let features = context.as_ref();
+        let features = context;
 
         for arm in arms {
             if let Some(model) = self.arm_models.get(arm) {
@@ -179,7 +183,7 @@ mod tests {
         policy.update(&1, &[1.0, 0.0], 1.0);
 
         // Reset and check that model is cleared
-        <LinUcb<i32> as Policy<i32, Vec<f64>>>::reset(&mut policy);
+        <LinUcb<i32> as Policy<i32, &[f64]>>::reset(&mut policy);
 
         let arms = IndexSet::from([1, 2]);
         let context = vec![1.0, 0.0];

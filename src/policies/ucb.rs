@@ -110,14 +110,14 @@ impl<A> Policy<A, ()> for Ucb<A>
 where
     A: Clone + Eq + Hash,
 {
-    fn update(&mut self, decision: &A, _context: &(), reward: f64) {
+    fn update(&mut self, decision: &A, _context: (), reward: f64) {
         let stats = self.arm_stats.entry(decision.clone()).or_default();
         stats.pulls += 1;
         stats.total_reward += reward;
         self.total_rounds += 1;
     }
 
-    fn select(&self, arms: &IndexSet<A>, _context: &(), _rng: &mut dyn rand::RngCore) -> Option<A> {
+    fn select(&self, arms: &IndexSet<A>, _context: (), _rng: &mut dyn rand::RngCore) -> Option<A> {
         if arms.is_empty() {
             return None;
         }
@@ -139,7 +139,7 @@ where
             .cloned()
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, _context: &()) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>, _context: ()) -> HashMap<A, f64> {
         if arms.is_empty() {
             return HashMap::new();
         }
@@ -209,11 +209,11 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should select an unpulled arm (any of them)
-        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
+        let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
         assert!(arms.contains(&choice));
 
         // All unpulled arms should have equal probability
-        let expectations = policy.expectations(&arms, &());
+        let expectations = policy.expectations(&arms, ());
         for (_arm, prob) in expectations {
             assert!((prob - 1.0 / 3.0).abs() < 1e-10);
         }
@@ -228,17 +228,17 @@ mod tests {
         arms.insert(3);
 
         // Train with some data - arm 2 has highest average but arm 3 is less explored
-        policy.update(&1, &(), 0.5);
-        policy.update(&1, &(), 0.4);
-        policy.update(&1, &(), 0.6);
-        policy.update(&2, &(), 0.9);
-        policy.update(&2, &(), 0.8);
-        policy.update(&3, &(), 0.7);
+        policy.update(&1, (), 0.5);
+        policy.update(&1, (), 0.4);
+        policy.update(&1, (), 0.6);
+        policy.update(&2, (), 0.9);
+        policy.update(&2, (), 0.8);
+        policy.update(&3, (), 0.7);
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should balance between high reward (arm 2) and exploration (arm 3)
-        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
+        let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
         // The exact choice depends on UCB calculation
         assert!([2, 3].contains(&choice));
     }
@@ -261,19 +261,19 @@ mod tests {
         arms.insert("z");
 
         // Train with clear winner
-        policy.update(&"x", &(), 0.1);
-        policy.update(&"y", &(), 0.5);
-        policy.update(&"z", &(), 0.9);
-        policy.update(&"x", &(), 0.2);
-        policy.update(&"y", &(), 0.6);
-        policy.update(&"z", &(), 0.8);
+        policy.update(&"x", (), 0.1);
+        policy.update(&"y", (), 0.5);
+        policy.update(&"z", (), 0.9);
+        policy.update(&"x", (), 0.2);
+        policy.update(&"y", (), 0.6);
+        policy.update(&"z", (), 0.8);
 
         let mut rng1 = rand::rngs::StdRng::seed_from_u64(1);
         let mut rng2 = rand::rngs::StdRng::seed_from_u64(999);
 
         // UCB is deterministic - should select same arm regardless of RNG
-        let choice1 = Policy::select(&policy, &arms, &(), &mut rng1).unwrap();
-        let choice2 = Policy::select(&policy, &arms, &(), &mut rng2).unwrap();
+        let choice1 = Policy::select(&policy, &arms, (), &mut rng1).unwrap();
+        let choice2 = Policy::select(&policy, &arms, (), &mut rng2).unwrap();
         assert_eq!(choice1, choice2);
     }
 
@@ -285,9 +285,9 @@ mod tests {
         assert_eq!(policy.arm_stats(&1), None);
 
         // After training
-        policy.update(&1, &(), 0.5);
-        policy.update(&1, &(), 0.7);
-        policy.update(&2, &(), 0.3);
+        policy.update(&1, (), 0.5);
+        policy.update(&1, (), 0.7);
+        policy.update(&2, (), 0.3);
 
         let stats = policy.arm_stats(&1).unwrap();
         assert_eq!(stats.0, 2); // pulls
@@ -301,9 +301,9 @@ mod tests {
     fn test_ucb_reset() {
         let mut policy = Ucb::new(1.414);
 
-        policy.update(&1, &(), 0.5);
-        policy.update(&2, &(), 0.8);
-        policy.update(&3, &(), 0.3);
+        policy.update(&1, (), 0.5);
+        policy.update(&2, (), 0.8);
+        policy.update(&3, (), 0.3);
         assert_eq!(policy.total_rounds(), 3);
 
         // Reset specific arm

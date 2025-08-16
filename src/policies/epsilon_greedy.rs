@@ -83,13 +83,13 @@ impl<A> Policy<A, ()> for EpsilonGreedy<A>
 where
     A: Clone + Eq + Hash,
 {
-    fn update(&mut self, decision: &A, _context: &(), reward: f64) {
+    fn update(&mut self, decision: &A, _context: (), reward: f64) {
         let stats = self.arm_stats.entry(decision.clone()).or_default();
         stats.pulls += 1;
         stats.total_reward += reward;
     }
 
-    fn select(&self, arms: &IndexSet<A>, _context: &(), rng: &mut dyn rand::RngCore) -> Option<A> {
+    fn select(&self, arms: &IndexSet<A>, _context: (), rng: &mut dyn rand::RngCore) -> Option<A> {
         if arms.is_empty() {
             return None;
         }
@@ -106,7 +106,7 @@ where
         }
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, _context: &()) -> HashMap<A, f64> {
+    fn expectations(&self, arms: &IndexSet<A>, _context: ()) -> HashMap<A, f64> {
         if arms.is_empty() {
             return HashMap::new();
         }
@@ -174,11 +174,11 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should return one of the arms randomly
-        let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
+        let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
         assert!(arms.contains(&choice));
 
         // Expectations should be uniform
-        let expectations = policy.expectations(&arms, &());
+        let expectations = policy.expectations(&arms, ());
         for (_arm, prob) in expectations {
             assert!((prob - 1.0 / 3.0).abs() < 1e-10);
         }
@@ -193,21 +193,21 @@ mod tests {
         arms.insert(3);
 
         // Train with some data - arm 2 has highest average
-        policy.update(&1, &(), 0.5);
-        policy.update(&2, &(), 1.0);
-        policy.update(&3, &(), 0.3);
-        policy.update(&2, &(), 0.8);
+        policy.update(&1, (), 0.5);
+        policy.update(&2, (), 1.0);
+        policy.update(&3, (), 0.3);
+        policy.update(&2, (), 0.8);
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
         // Should always pick arm 2 (highest average reward)
         for _ in 0..10 {
-            let choice = Policy::select(&policy, &arms, &(), &mut rng).unwrap();
+            let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
             assert_eq!(choice, 2);
         }
 
         // Expectations should give 100% to best arm
-        let expectations = policy.expectations(&arms, &());
+        let expectations = policy.expectations(&arms, ());
         assert!((expectations[&2] - 1.0).abs() < 1e-10);
         assert!((expectations[&1] - 0.0).abs() < 1e-10);
         assert!((expectations[&3] - 0.0).abs() < 1e-10);
@@ -222,13 +222,13 @@ mod tests {
         arms.insert("z");
 
         // Train with some data - "y" has highest average
-        policy.update(&"x", &(), 0.4);
-        policy.update(&"y", &(), 0.9);
-        policy.update(&"z", &(), 0.2);
-        policy.update(&"y", &(), 0.8);
+        policy.update(&"x", (), 0.4);
+        policy.update(&"y", (), 0.9);
+        policy.update(&"z", (), 0.2);
+        policy.update(&"y", (), 0.8);
 
         // Check expectations
-        let expectations = policy.expectations(&arms, &());
+        let expectations = policy.expectations(&arms, ());
 
         // "y" should get 70% + 10% = 80%
         assert!((expectations[&"y"] - 0.8).abs() < 1e-10);
@@ -242,9 +242,9 @@ mod tests {
         let mut policy = EpsilonGreedy::new(0.5);
 
         // Train with some data
-        policy.update(&1, &(), 0.5);
-        policy.update(&2, &(), 0.8);
-        policy.update(&3, &(), 0.3);
+        policy.update(&1, (), 0.5);
+        policy.update(&2, (), 0.8);
+        policy.update(&3, (), 0.3);
 
         // Reset arm 2
         policy.reset_arm(&2);
@@ -259,7 +259,7 @@ mod tests {
         // With epsilon=0.5 and arm 1 being best, it should be selected often
         let mut count_1 = 0;
         for _ in 0..100 {
-            if Policy::select(&policy, &arms, &(), &mut rng) == Some(1) {
+            if Policy::select(&policy, &arms, (), &mut rng) == Some(1) {
                 count_1 += 1;
             }
         }
@@ -285,9 +285,9 @@ mod tests {
         assert_eq!(policy.arm_stats(&1), None);
 
         // After training
-        policy.update(&1, &(), 0.5);
-        policy.update(&1, &(), 0.7);
-        policy.update(&2, &(), 0.3);
+        policy.update(&1, (), 0.5);
+        policy.update(&1, (), 0.7);
+        policy.update(&2, (), 0.3);
 
         assert_eq!(policy.arm_stats(&1), Some((2, 0.6)));
         assert_eq!(policy.arm_stats(&2), Some((1, 0.3)));

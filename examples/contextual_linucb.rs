@@ -76,7 +76,7 @@ fn main() {
         println!("\n{} (context: {:?})", user_type, context);
 
         // Get expected rewards for each content type
-        let expectations = bandit.predict_expectations(&context);
+        let expectations = bandit.predict_expectations(context.as_slice());
 
         println!("Expected rewards:");
         let mut sorted_expectations: Vec<_> = expectations.iter().collect();
@@ -87,7 +87,7 @@ fn main() {
         }
 
         // Make a prediction (includes exploration via UCB)
-        let recommendation = bandit.predict(&context, &mut rng).unwrap();
+        let recommendation = bandit.predict(context.as_slice(), &mut rng).unwrap();
         println!("Recommendation: {}", recommendation);
     }
 
@@ -101,7 +101,9 @@ fn main() {
 
     let mut selections = std::collections::HashMap::new();
     for _ in 0..20 {
-        let choice = bandit.predict(&uncertain_context, &mut rng).unwrap();
+        let choice = bandit
+            .predict(uncertain_context.as_slice(), &mut rng)
+            .unwrap();
         *selections.entry(choice).or_insert(0) += 1;
     }
 

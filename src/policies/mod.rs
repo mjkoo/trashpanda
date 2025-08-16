@@ -17,8 +17,8 @@ use std::collections::HashMap;
 ///
 /// This trait provides a unified interface for both contextual and non-contextual
 /// policies through a generic context parameter. Non-contextual policies use
-/// the default `()` type, while contextual policies can use any type that
-/// provides access to features (typically implementing `AsRef<[f64]>`).
+/// the default `()` type passed by value, while contextual policies typically
+/// use reference types like `&[f64]`.
 ///
 /// # Type Parameters
 /// - `A`: The arm type, must be hashable
@@ -33,7 +33,7 @@ pub trait Policy<A, C = ()> {
     /// - `decision`: The arm that was selected
     /// - `context`: The context when the decision was made
     /// - `reward`: The observed reward
-    fn update(&mut self, decision: &A, context: &C, reward: f64);
+    fn update(&mut self, decision: &A, context: C, reward: f64);
 
     /// Select an arm from the available arms given a context
     ///
@@ -44,7 +44,7 @@ pub trait Policy<A, C = ()> {
     ///
     /// # Returns
     /// The selected arm, or None if no arms are available
-    fn select(&self, arms: &IndexSet<A>, context: &C, rng: &mut dyn rand::RngCore) -> Option<A>;
+    fn select(&self, arms: &IndexSet<A>, context: C, rng: &mut dyn rand::RngCore) -> Option<A>;
 
     /// Get the expected reward for each arm given a context
     ///
@@ -54,7 +54,7 @@ pub trait Policy<A, C = ()> {
     ///
     /// # Returns
     /// A map of arms to their expected rewards
-    fn expectations(&self, arms: &IndexSet<A>, context: &C) -> HashMap<A, f64>;
+    fn expectations(&self, arms: &IndexSet<A>, context: C) -> HashMap<A, f64>;
 
     /// Reset statistics for a specific arm (e.g., when arm is removed/re-added)
     fn reset_arm(&mut self, arm: &A);
