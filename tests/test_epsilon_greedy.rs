@@ -31,11 +31,13 @@ fn test_epsilon_greedy_pure_exploration() {
         .fit_simple(&[1, 2, 3, 2], &[0.1, 1.0, 0.2, 0.9])
         .unwrap();
 
-    // Check that expectations are uniform despite training
-    let expectations = bandit.predict_expectations_simple();
-    for (_arm, prob) in expectations {
-        assert!((prob - 1.0 / 3.0).abs() < 1e-10);
-    }
+    // Check that expectations reflect actual trained rewards
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let expectations = bandit.predict_expectations_simple(&mut rng);
+    // Expected: arm 1 = 0.1, arm 2 = (1.0 + 0.9) / 2 = 0.95, arm 3 = 0.2
+    assert!((expectations[&1] - 0.1).abs() < 1e-10);
+    assert!((expectations[&2] - 0.95).abs() < 1e-10);
+    assert!((expectations[&3] - 0.2).abs() < 1e-10);
 }
 
 #[test]
@@ -51,14 +53,14 @@ fn test_epsilon_greedy_mixed_strategy() {
         )
         .unwrap();
 
-    // Check expectations
-    let expectations = bandit.predict_expectations_simple();
+    // Check expectations - should reflect actual average rewards
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let expectations = bandit.predict_expectations_simple(&mut rng);
 
-    // "green" should get 80% + 6.67% ≈ 86.67%
-    assert!((expectations[&"green"] - (0.8 + 0.2 / 3.0)).abs() < 1e-10);
-    // Others should get 6.67% each
-    assert!((expectations[&"red"] - 0.2 / 3.0).abs() < 1e-10);
-    assert!((expectations[&"blue"] - 0.2 / 3.0).abs() < 1e-10);
+    // Expected: red = (0.3 + 0.2) / 2 = 0.25, green = (0.9 + 0.8) / 2 = 0.85, blue = 0.1
+    assert!((expectations[&"red"] - 0.25).abs() < 1e-10);
+    assert!((expectations[&"green"] - 0.85).abs() < 1e-10);
+    assert!((expectations[&"blue"] - 0.1).abs() < 1e-10);
 }
 
 #[test]
@@ -67,7 +69,8 @@ fn test_epsilon_greedy_learning() {
     let mut bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.1)).unwrap();
 
     // Initially all arms are equal
-    let initial_exp = bandit.predict_expectations_simple();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let initial_exp = bandit.predict_expectations_simple(&mut rng);
     // With no data, expectations might be arbitrary but valid
     assert_eq!(initial_exp.len(), 3);
 
@@ -77,7 +80,8 @@ fn test_epsilon_greedy_learning() {
         .unwrap();
 
     // Now arm 3 should have highest probability
-    let trained_exp = bandit.predict_expectations_simple();
+    let mut rng2 = rand::rngs::StdRng::seed_from_u64(42);
+    let trained_exp = bandit.predict_expectations_simple(&mut rng2);
     assert!(trained_exp[&3] > trained_exp[&1]);
     assert!(trained_exp[&3] > trained_exp[&2]);
 }
@@ -111,14 +115,16 @@ fn test_epsilon_greedy_dynamic_arms() {
 
     // New arm starts with no data (average = 0)
     // Arm 1 has average 0.65, so it should be preferred
-    let expectations = bandit.predict_expectations_simple();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let expectations = bandit.predict_expectations_simple(&mut rng);
     assert!(expectations[&1] > expectations[&3]);
 
     // Train the new arm to be best
     bandit.fit_simple(&[3, 3], &[0.9, 0.95]).unwrap();
 
     // Now arm 3 should be preferred
-    let expectations = bandit.predict_expectations_simple();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+    let expectations = bandit.predict_expectations_simple(&mut rng);
     assert!(expectations[&3] > expectations[&1]);
     assert!(expectations[&3] > expectations[&2]);
 }

@@ -42,7 +42,7 @@ mod regression;
 
 // Re-export main types
 pub use bandit::Bandit;
-pub use error::{BanditError, PolicyError, PolicyResult, Result};
+pub use error::{BanditError, Result};
 
 // Re-export IndexSet for users implementing custom policies
 pub use indexmap::IndexSet;

@@ -5,9 +5,6 @@ use thiserror::Error;
 /// Result type alias for bandit operations.
 pub type Result<T> = std::result::Result<T, BanditError>;
 
-/// Result type alias for policy operations.
-pub type PolicyResult<T> = std::result::Result<T, PolicyError>;
-
 /// Errors that can occur during bandit operations.
 #[derive(Error, Debug, Clone, PartialEq)]
 #[non_exhaustive]
@@ -31,23 +28,6 @@ pub enum BanditError {
     /// Builder configuration error.
     #[error("builder configuration error: {message}")]
     BuilderError { message: String },
-
-    /// Policy-related error.
-    #[error(transparent)]
-    PolicyError(#[from] PolicyError),
-}
-
-/// Errors that can occur during policy operations.
-#[derive(Error, Debug, Clone, PartialEq)]
-#[non_exhaustive]
-pub enum PolicyError {
-    /// Context was provided to a non-contextual policy.
-    #[error("this policy does not support context (use fit() and predict() instead)")]
-    ContextNotSupported,
-
-    /// Context was required but not provided.
-    #[error("this policy requires context (use fit_with_context() and predict_with_context())")]
-    ContextRequired,
 }
 
 #[cfg(test)]

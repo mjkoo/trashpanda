@@ -35,6 +35,7 @@ where
 struct ArmStats {
     pulls: usize,
     total_reward: f64,
+    average_reward: f64,
 }
 
 impl ArmStats {
@@ -114,6 +115,7 @@ where
         let stats = self.arm_stats.entry(decision.clone()).or_default();
         stats.pulls += 1;
         stats.total_reward += reward;
+        stats.average_reward = stats.total_reward / stats.pulls as f64;
         self.total_rounds += 1;
     }
 
@@ -139,45 +141,22 @@ where
             .cloned()
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, _context: ()) -> HashMap<A, f64> {
-        if arms.is_empty() {
-            return HashMap::new();
-        }
-
-        // Calculate UCB scores for all arms
-        let scores: Vec<(A, f64)> = arms
-            .iter()
-            .map(|arm| {
-                let score = self.arm_stats.get(arm).map_or(f64::INFINITY, |s| {
-                    s.ucb_score(self.total_rounds, self.alpha)
-                });
-                (arm.clone(), score)
-            })
-            .collect();
-
-        // Find the best arm(s)
-        let max_score = scores
-            .iter()
-            .map(|(_, score)| *score)
-            .fold(f64::NEG_INFINITY, f64::max);
-
-        // UCB is deterministic - best arm gets probability 1.0
-        // If multiple arms have the same best score (e.g., all unpulled), split equally
-        let best_arms: Vec<_> = scores
-            .iter()
-            .filter(|(_, score)| (*score - max_score).abs() < 1e-10 || score.is_infinite())
-            .map(|(arm, _)| arm.clone())
-            .collect();
-
-        let prob = 1.0 / best_arms.len() as f64;
-
+    fn expectations(
+        &self,
+        arms: &IndexSet<A>,
+        _context: (),
+        _rng: &mut dyn rand::RngCore,
+    ) -> HashMap<A, f64> {
         let mut expectations = HashMap::new();
+
+        // Return the average reward (expectation) for each arm
+        // Arms without data have an expectation of 0.0
         for arm in arms {
-            if best_arms.contains(arm) {
-                expectations.insert(arm.clone(), prob);
-            } else {
-                expectations.insert(arm.clone(), 0.0);
-            }
+            let expected_reward = self
+                .arm_stats
+                .get(arm)
+                .map_or(0.0, |stats| stats.average_reward);
+            expectations.insert(arm.clone(), expected_reward);
         }
 
         expectations
@@ -212,10 +191,11 @@ mod tests {
         let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
         assert!(arms.contains(&choice));
 
-        // All unpulled arms should have equal probability
-        let expectations = policy.expectations(&arms, ());
-        for (_arm, prob) in expectations {
-            assert!((prob - 1.0 / 3.0).abs() < 1e-10);
+        // All unpulled arms should have 0.0 expected reward (no data)
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, (), &mut rng);
+        for (_arm, expected_reward) in expectations {
+            assert_eq!(expected_reward, 0.0);
         }
     }
 

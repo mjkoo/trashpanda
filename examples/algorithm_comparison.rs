@@ -29,7 +29,7 @@ fn main() {
         println!("\nRandom");
         println!("{}", "-".repeat(6));
 
-        let mut bandit = Bandit::new(arms.clone(), Random).unwrap();
+        let mut bandit = Bandit::new(arms.clone(), Random::default()).unwrap();
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let mut total_reward = 0.0;
         let mut arm_selections = HashMap::new();
@@ -69,7 +69,8 @@ fn main() {
         }
 
         // Show final expectations
-        let expectations = bandit.predict_expectations_simple();
+        let mut rng_exp = rand::rngs::StdRng::seed_from_u64(123);
+        let expectations = bandit.predict_expectations_simple(&mut rng_exp);
         println!("  Final arm probabilities:");
 
         let mut exp_vec: Vec<_> = expectations.iter().collect();
@@ -111,7 +112,8 @@ fn main() {
         for (arm, count) in selections {
             println!("    {}: {} ({:.1}%)", arm, count, (*count as f64 / 10.0));
         }
-        let expectations = bandit.predict_expectations_simple();
+        let mut rng_exp = rand::rngs::StdRng::seed_from_u64(123);
+        let expectations = bandit.predict_expectations_simple(&mut rng_exp);
         println!("  Final arm probabilities:");
         let mut exp_vec: Vec<_> = expectations.iter().collect();
         exp_vec.sort_by_key(|&(arm, _)| *arm);
@@ -151,7 +153,8 @@ fn main() {
         for (arm, count) in selections {
             println!("    {}: {} ({:.1}%)", arm, count, (*count as f64 / 10.0));
         }
-        let expectations = bandit.predict_expectations_simple();
+        let mut rng_exp = rand::rngs::StdRng::seed_from_u64(123);
+        let expectations = bandit.predict_expectations_simple(&mut rng_exp);
         println!("  Final arm probabilities:");
         let mut exp_vec: Vec<_> = expectations.iter().collect();
         exp_vec.sort_by_key(|&(arm, _)| *arm);
@@ -191,7 +194,8 @@ fn main() {
         for (arm, count) in selections {
             println!("    {}: {} ({:.1}%)", arm, count, (*count as f64 / 10.0));
         }
-        let expectations = bandit.predict_expectations_simple();
+        let mut rng_exp = rand::rngs::StdRng::seed_from_u64(123);
+        let expectations = bandit.predict_expectations_simple(&mut rng_exp);
         println!("  Final arm probabilities:");
         let mut exp_vec: Vec<_> = expectations.iter().collect();
         exp_vec.sort_by_key(|&(arm, _)| *arm);

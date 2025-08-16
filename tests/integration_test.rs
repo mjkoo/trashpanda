@@ -5,7 +5,7 @@ use trashpanda::prelude::*;
 
 #[test]
 fn test_basic_bandit_creation() {
-    let bandit = Bandit::new(vec!["option_a", "option_b", "option_c"], Random).unwrap();
+    let bandit = Bandit::new(vec!["option_a", "option_b", "option_c"], Random::default()).unwrap();
 
     assert_eq!(bandit.arms().len(), 3);
     assert!(bandit.has_arm(&"option_a"));
@@ -35,7 +35,7 @@ fn test_string_arms() {
 
 #[test]
 fn test_dynamic_arm_management() {
-    let mut bandit = Bandit::new(vec![1, 2], Random).unwrap();
+    let mut bandit = Bandit::new(vec![1, 2], Random::default()).unwrap();
 
     // Start with 2 arms
     assert_eq!(bandit.arms().len(), 2);
@@ -71,7 +71,7 @@ fn test_direct_construction() {
     let bandit = Bandit::new(vec![1, 2, 3], EpsilonGreedy::new(0.1)).unwrap();
     assert_eq!(bandit.arms().len(), 3);
 
-    let bandit = Bandit::new(vec!["a", "b", "c"], Random).unwrap();
+    let bandit = Bandit::new(vec!["a", "b", "c"], Random::default()).unwrap();
     assert_eq!(bandit.arms().len(), 3);
 
     // Test with direct construction

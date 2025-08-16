@@ -76,7 +76,8 @@ fn main() {
         println!("\n{} (context: {:?})", user_type, context);
 
         // Get expected rewards for each content type
-        let expectations = bandit.predict_expectations(&context[..]);
+        let mut rng_exp = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = bandit.predict_expectations(&context[..], &mut rng_exp);
 
         println!("Expected rewards:");
         let mut sorted_expectations: Vec<_> = expectations.iter().collect();

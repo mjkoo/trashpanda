@@ -117,11 +117,18 @@ where
         best_arm
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, context: &[f64]) -> HashMap<A, f64> {
+    fn expectations(
+        &self,
+        arms: &IndexSet<A>,
+        context: &[f64],
+        _rng: &mut dyn rand::RngCore,
+    ) -> HashMap<A, f64> {
         let mut expectations = HashMap::new();
 
         for arm in arms {
             if let Some(model) = self.arm_models.get(arm) {
+                // For LinTS, expectations should return the mean prediction (not sampled values)
+                // This matches MABWiser's behavior where the base ridge regression returns mean
                 expectations.insert(arm.clone(), model.predict(context));
             } else {
                 // Uninitialized arms get zero expectation
@@ -179,7 +186,8 @@ mod tests {
 
         // Check expectations
         let context = vec![1.0, 0.0];
-        let expectations = policy.expectations(&arms, &context);
+        let mut rng = StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, &context, &mut rng);
 
         // Arm "a" should have higher expectation for context [1.0, 0.0]
         assert!(expectations[&"a"] > expectations[&"b"]);
@@ -197,7 +205,8 @@ mod tests {
 
         let arms = IndexSet::from([1, 2]);
         let context = vec![1.0, 0.0];
-        let expectations = policy.expectations(&arms, &context);
+        let mut rng = StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, &context, &mut rng);
 
         // After reset, all arms should have zero expectation
         assert_eq!(expectations[&1], 0.0);

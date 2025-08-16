@@ -1,6 +1,6 @@
 use super::Policy;
 use indexmap::IndexSet;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use rand_distr::{Beta, Distribution};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -165,46 +165,32 @@ where
             .map(|(arm, _)| arm.clone())
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, _context: ()) -> HashMap<A, f64> {
-        if arms.is_empty() {
-            return HashMap::new();
+    fn expectations(
+        &self,
+        arms: &IndexSet<A>,
+        _context: (),
+        _rng: &mut dyn rand::RngCore,
+    ) -> HashMap<A, f64> {
+        let mut expectations = HashMap::new();
+
+        // Return the expected reward for each arm based on the Beta distribution mean
+        // For Beta(α, β), the mean is α / (α + β)
+        for arm in arms {
+            let expected_reward = match self.arm_stats.get(arm) {
+                Some(stats) => {
+                    let alpha = stats.successes + self.prior_alpha;
+                    let beta = stats.failures + self.prior_beta;
+                    alpha / (alpha + beta)
+                }
+                None => {
+                    // Use prior mean for unobserved arms
+                    self.prior_alpha / (self.prior_alpha + self.prior_beta)
+                }
+            };
+            expectations.insert(arm.clone(), expected_reward);
         }
 
-        // For Thompson Sampling, the expectation is based on the probability
-        // that each arm is optimal. We approximate this by sampling many times.
-        const N_SAMPLES: usize = 1000;
-        let mut wins: HashMap<A, usize> = HashMap::new();
-
-        // Use a deterministic RNG for consistent expectations
-        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
-
-        for _ in 0..N_SAMPLES {
-            let best_arm = arms
-                .iter()
-                .map(|arm| {
-                    let sample = match self.arm_stats.get(arm) {
-                        Some(stats) => stats.sample(self.prior_alpha, self.prior_beta, &mut rng),
-                        None => {
-                            ArmStats::default().sample(self.prior_alpha, self.prior_beta, &mut rng)
-                        }
-                    };
-                    (arm, sample)
-                })
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|(arm, _)| arm.clone());
-
-            if let Some(arm) = best_arm {
-                *wins.entry(arm).or_insert(0) += 1;
-            }
-        }
-
-        // Convert win counts to probabilities
-        arms.iter()
-            .map(|arm| {
-                let win_count = wins.get(arm).copied().unwrap_or(0);
-                (arm.clone(), win_count as f64 / N_SAMPLES as f64)
-            })
-            .collect()
+        expectations
     }
 
     fn reset_arm(&mut self, arm: &A) {
@@ -252,7 +238,8 @@ mod tests {
         }
 
         // Check expectations - arm 2 should have highest probability
-        let expectations = policy.expectations(&arms, ());
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, (), &mut rng);
         assert!(expectations[&2] > expectations[&1]);
         assert!(expectations[&2] > expectations[&3]);
     }
@@ -336,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn test_thompson_sampling_expectations_sum_to_one() {
+    fn test_thompson_sampling_expectations_reflect_beta_means() {
         let mut policy = ThompsonSampling::new();
         let mut arms = IndexSet::new();
         arms.insert("a");
@@ -347,8 +334,15 @@ mod tests {
         policy.update(&"b", (), 0.4);
         policy.update(&"c", (), 0.5);
 
-        let expectations = policy.expectations(&arms, ());
-        let sum: f64 = expectations.values().sum();
-        assert!((sum - 1.0).abs() < 0.01); // Should sum to approximately 1.0
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, (), &mut rng);
+
+        // With Beta(1,1) prior and one observation each:
+        // "a": Beta(1 + 0.6, 1 + 0.4) = Beta(1.6, 1.4), mean = 1.6/3.0 ≈ 0.533
+        // "b": Beta(1 + 0.4, 1 + 0.6) = Beta(1.4, 1.6), mean = 1.4/3.0 ≈ 0.467
+        // "c": Beta(1 + 0.5, 1 + 0.5) = Beta(1.5, 1.5), mean = 1.5/3.0 = 0.5
+        assert!((expectations[&"a"] - (1.6 / 3.0)).abs() < 1e-10);
+        assert!((expectations[&"b"] - (1.4 / 3.0)).abs() < 1e-10);
+        assert!((expectations[&"c"] - (1.5 / 3.0)).abs() < 1e-10);
     }
 }

@@ -40,7 +40,23 @@ where
         })
     }
 
-    /// Fit the bandit with training data (batch update)
+    /// Fit the bandit with training data
+    ///
+    /// This method resets the policy and trains it with the provided data.
+    /// For incremental updates without resetting, use [`partial_fit`](Self::partial_fit).
+    /// For non-contextual bandits, use [`fit_simple`](Self::fit_simple) instead.
+    ///
+    /// # Arguments
+    /// - `decisions`: The arms that were selected
+    /// - `context`: The context when decisions were made (same for all)
+    /// - `rewards`: The observed rewards
+    ///
+    /// # Why `C: Copy`?
+    ///
+    /// The `Copy` bound is required because the same context needs to be passed to
+    /// multiple update calls in the loop. This design supports both:
+    /// - Trivial types like `()` for non-contextual bandits
+    /// - References like `&[f64]` for contextual bandits
     pub fn fit(&mut self, decisions: &[A], context: C, rewards: &[f64]) -> Result<(), BanditError>
     where
         C: Copy,
@@ -57,14 +73,29 @@ where
 
         self.validate_decisions(decisions)?;
 
-        // Call update() for each decision-reward pair
+        // Reset the policy state before training
+        self.policy.reset();
+
+        // Train with the provided data
         for (decision, reward) in decisions.iter().zip(rewards) {
             self.policy.update(decision, context, *reward);
         }
         Ok(())
     }
 
-    /// Incrementally fit the bandit (alias for fit)
+    /// Incrementally fit the bandit with new observations
+    ///
+    /// This method updates the policy without resetting its state, adding to
+    /// existing knowledge. For training from scratch, use [`fit`](Self::fit).
+    ///
+    /// # Arguments
+    /// - `decisions`: The arms that were selected
+    /// - `context`: The context when decisions were made (same for all)
+    /// - `rewards`: The observed rewards
+    ///
+    /// # Difference from `fit`
+    /// - `fit`: Resets the policy state before training (replaces knowledge)
+    /// - `partial_fit`: Adds to existing state (incremental learning)
     pub fn partial_fit(
         &mut self,
         decisions: &[A],
@@ -74,7 +105,23 @@ where
     where
         C: Copy,
     {
-        self.fit(decisions, context, rewards)
+        if decisions.len() != rewards.len() {
+            return Err(BanditError::DimensionMismatch {
+                message: format!(
+                    "Mismatched dimensions: decisions={}, rewards={}",
+                    decisions.len(),
+                    rewards.len()
+                ),
+            });
+        }
+
+        self.validate_decisions(decisions)?;
+
+        // Update without resetting (incremental)
+        for (decision, reward) in decisions.iter().zip(rewards) {
+            self.policy.update(decision, context, *reward);
+        }
+        Ok(())
     }
 
     /// Make a prediction
@@ -85,8 +132,8 @@ where
     }
 
     /// Get expected rewards
-    pub fn predict_expectations(&self, context: C) -> HashMap<A, f64> {
-        self.policy.expectations(&self.arms, context)
+    pub fn predict_expectations(&self, context: C, rng: &mut dyn rand::RngCore) -> HashMap<A, f64> {
+        self.policy.expectations(&self.arms, context, rng)
     }
 
     /// Gets the available arms
@@ -152,8 +199,21 @@ where
     P: Policy<A, ()>,
 {
     /// Fit without context for non-contextual bandits
+    ///
+    /// Resets the policy state and trains from scratch.
     pub fn fit_simple(&mut self, decisions: &[A], rewards: &[f64]) -> Result<(), BanditError> {
         self.fit(decisions, (), rewards)
+    }
+
+    /// Incrementally fit without context for non-contextual bandits
+    ///
+    /// Adds to existing knowledge without resetting.
+    pub fn partial_fit_simple(
+        &mut self,
+        decisions: &[A],
+        rewards: &[f64],
+    ) -> Result<(), BanditError> {
+        self.partial_fit(decisions, (), rewards)
     }
 
     /// Predict without context for non-contextual bandits
@@ -162,8 +222,8 @@ where
     }
 
     /// Get expectations without context for non-contextual bandits
-    pub fn predict_expectations_simple(&self) -> HashMap<A, f64> {
-        self.predict_expectations(())
+    pub fn predict_expectations_simple(&self, rng: &mut dyn rand::RngCore) -> HashMap<A, f64> {
+        self.predict_expectations((), rng)
     }
 }
 
@@ -217,7 +277,7 @@ where
     }
 }
 
-impl<A> Bandit<A, crate::policies::Random, ()>
+impl<A> Bandit<A, crate::policies::Random<A>, ()>
 where
     A: Clone + Eq + Hash,
 {
@@ -226,7 +286,7 @@ where
     where
         I: IntoIterator<Item = A>,
     {
-        Self::new(arms, crate::policies::Random)
+        Self::new(arms, crate::policies::Random::default())
     }
 }
 
@@ -351,15 +411,15 @@ mod tests {
 
     #[test]
     fn test_bandit_creation() {
-        let bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
+        let bandit = Bandit::new(vec![1, 2, 3], Random::default()).unwrap();
         assert_eq!(bandit.arms().len(), 3);
     }
 
     #[test]
     fn test_bandit_builder() {
-        let bandit = Bandit::<i32, Random, ()>::builder()
+        let bandit = Bandit::<i32, Random<i32>, ()>::builder()
             .arms(vec![1, 2, 3])
-            .policy(Random)
+            .policy(Random::default())
             .build()
             .unwrap();
         assert_eq!(bandit.arms().len(), 3);
@@ -375,13 +435,94 @@ mod tests {
         let choice = bandit.predict_simple(&mut rng).unwrap();
         assert!(bandit.arms().contains(&choice));
 
-        let expectations = bandit.predict_expectations_simple();
+        let expectations = bandit.predict_expectations_simple(&mut rng);
         assert_eq!(expectations.len(), 3);
     }
 
     #[test]
+    fn test_partial_fit_method() {
+        let mut bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.0).unwrap(); // Pure exploitation
+
+        // Test incremental updates
+        bandit.partial_fit(&[1], (), &[1.0]).unwrap();
+        bandit.partial_fit(&[2], (), &[0.5]).unwrap();
+        bandit.partial_fit(&[1], (), &[0.8]).unwrap();
+
+        // Test batch partial fit
+        bandit
+            .partial_fit(&[1, 2, 3], (), &[0.9, 0.3, 0.4])
+            .unwrap();
+
+        // Test invalid arm
+        assert!(bandit.partial_fit(&[4], (), &[1.0]).is_err());
+
+        // Verify it learned (arm 1 should be preferred with exploitation)
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let choice = bandit.predict_simple(&mut rng).unwrap();
+        assert_eq!(choice, 1); // Should pick arm 1 with highest average reward
+    }
+
+    #[test]
+    fn test_partial_fit_simple_method() {
+        let mut bandit = Bandit::epsilon_greedy(vec!["a", "b", "c"], 0.0).unwrap();
+
+        // Test partial_fit_simple with single observations
+        bandit.partial_fit_simple(&["a"], &[1.0]).unwrap();
+        bandit.partial_fit_simple(&["b"], &[0.5]).unwrap();
+        bandit.partial_fit_simple(&["a"], &[0.8]).unwrap();
+
+        // Test batch update
+        bandit
+            .partial_fit_simple(&["a", "b", "c"], &[0.9, 0.3, 0.4])
+            .unwrap();
+
+        // Test invalid arm
+        assert!(bandit.partial_fit_simple(&["d"], &[1.0]).is_err());
+
+        // Verify it learned
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let choice = bandit.predict_simple(&mut rng).unwrap();
+        assert_eq!(choice, "a"); // Should pick arm "a" with highest average reward
+    }
+
+    #[test]
+    fn test_fit_vs_partial_fit() {
+        let mut bandit1 = Bandit::epsilon_greedy(vec![1, 2, 3], 0.0).unwrap();
+        let mut bandit2 = Bandit::epsilon_greedy(vec![1, 2, 3], 0.0).unwrap();
+
+        // Train bandit1 with fit (should reset each time)
+        bandit1.fit(&[1, 1, 2], (), &[1.0, 0.8, 0.5]).unwrap();
+        bandit1.fit(&[3, 3], (), &[0.9, 0.95]).unwrap(); // This replaces previous training
+
+        // Train bandit2 with partial_fit (should accumulate)
+        bandit2
+            .partial_fit(&[1, 1, 2], (), &[1.0, 0.8, 0.5])
+            .unwrap();
+        bandit2.partial_fit(&[3, 3], (), &[0.9, 0.95]).unwrap(); // This adds to previous training
+
+        // Get expectations
+        let mut rng_exp1 = rand::rngs::StdRng::seed_from_u64(42);
+        let mut rng_exp2 = rand::rngs::StdRng::seed_from_u64(42);
+        let exp1 = bandit1.predict_expectations_simple(&mut rng_exp1);
+        let exp2 = bandit2.predict_expectations_simple(&mut rng_exp2);
+
+        // bandit1 should only have data from the second fit (arms 3)
+        // bandit2 should have accumulated data from both partial_fits
+
+        // For bandit1: only arm 3 has data (0.9 + 0.95) / 2 = 0.925
+        assert_eq!(exp1.get(&1), Some(&0.0)); // No data after reset
+        assert_eq!(exp1.get(&2), Some(&0.0)); // No data after reset
+        assert!(*exp1.get(&3).unwrap() > 0.9); // Has recent data
+
+        // For bandit2: all arms have accumulated data
+        assert!(*exp2.get(&1).unwrap() > 0.0); // Has data from first partial_fit
+        assert!(*exp2.get(&2).unwrap() > 0.0); // Has data from first partial_fit
+        assert!(*exp2.get(&3).unwrap() > 0.0); // Has data from second partial_fit
+    }
+
+    #[test]
     fn test_add_remove_arms() {
-        let mut bandit = Bandit::new(vec![1, 2, 3], Random).unwrap();
+        let mut bandit = Bandit::new(vec![1, 2, 3], Random::default()).unwrap();
 
         // Add a new arm
         bandit.add_arm(4).unwrap();

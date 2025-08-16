@@ -55,10 +55,16 @@ pub trait Policy<A, C = ()> {
     /// # Arguments
     /// - `arms`: The available arms
     /// - `context`: The current context
+    /// - `rng`: Random number generator for stochastic expectations (e.g., epsilon-greedy mixing)
     ///
     /// # Returns
     /// A map of arms to their expected rewards
-    fn expectations(&self, arms: &IndexSet<A>, context: C) -> HashMap<A, f64>;
+    fn expectations(
+        &self,
+        arms: &IndexSet<A>,
+        context: C,
+        rng: &mut dyn rand::RngCore,
+    ) -> HashMap<A, f64>;
 
     /// Reset statistics for a specific arm (e.g., when arm is removed/re-added)
     fn reset_arm(&mut self, arm: &A);

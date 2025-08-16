@@ -106,27 +106,22 @@ where
         }
     }
 
-    fn expectations(&self, arms: &IndexSet<A>, _context: ()) -> HashMap<A, f64> {
-        if arms.is_empty() {
-            return HashMap::new();
-        }
-
-        // Find the best arm
-        let best_arm = self.find_best_arm(arms);
-        let best_arm_ref = best_arm.as_ref();
-
-        // Calculate probabilities
-        let explore_prob = self.epsilon / arms.len() as f64;
-        let exploit_prob = 1.0 - self.epsilon;
-
+    fn expectations(
+        &self,
+        arms: &IndexSet<A>,
+        _context: (),
+        _rng: &mut dyn rand::RngCore,
+    ) -> HashMap<A, f64> {
         let mut expectations = HashMap::new();
+
+        // Return the average reward (expectation) for each arm
+        // Arms without data have an expectation of 0.0
         for arm in arms {
-            let prob = if Some(arm) == best_arm_ref {
-                exploit_prob + explore_prob
-            } else {
-                explore_prob
-            };
-            expectations.insert(arm.clone(), prob);
+            let expected_reward = self
+                .arm_stats
+                .get(arm)
+                .map_or(0.0, |stats| stats.average_reward());
+            expectations.insert(arm.clone(), expected_reward);
         }
 
         expectations
@@ -177,10 +172,11 @@ mod tests {
         let choice = Policy::select(&policy, &arms, (), &mut rng).unwrap();
         assert!(arms.contains(&choice));
 
-        // Expectations should be uniform
-        let expectations = policy.expectations(&arms, ());
-        for (_arm, prob) in expectations {
-            assert!((prob - 1.0 / 3.0).abs() < 1e-10);
+        // All arms should have 0.0 expected reward (no training data)
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, (), &mut rng);
+        for (_arm, expected_reward) in expectations {
+            assert_eq!(expected_reward, 0.0);
         }
     }
 
@@ -206,11 +202,12 @@ mod tests {
             assert_eq!(choice, 2);
         }
 
-        // Expectations should give 100% to best arm
-        let expectations = policy.expectations(&arms, ());
-        assert!((expectations[&2] - 1.0).abs() < 1e-10);
-        assert!((expectations[&1] - 0.0).abs() < 1e-10);
-        assert!((expectations[&3] - 0.0).abs() < 1e-10);
+        // Expectations should reflect actual average rewards
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, (), &mut rng);
+        assert!((expectations[&2] - 0.9).abs() < 1e-10); // (1.0 + 0.8) / 2 = 0.9
+        assert!((expectations[&1] - 0.5).abs() < 1e-10); // 0.5 / 1 = 0.5
+        assert!((expectations[&3] - 0.3).abs() < 1e-10); // 0.3 / 1 = 0.3
     }
 
     #[test]
@@ -227,14 +224,16 @@ mod tests {
         policy.update(&"z", (), 0.2);
         policy.update(&"y", (), 0.8);
 
-        // Check expectations
-        let expectations = policy.expectations(&arms, ());
+        // Check expectations - should reflect actual average rewards
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let expectations = policy.expectations(&arms, (), &mut rng);
 
-        // "y" should get 70% + 10% = 80%
-        assert!((expectations[&"y"] - 0.8).abs() < 1e-10);
-        // Others should get 10% each
-        assert!((expectations[&"x"] - 0.1).abs() < 1e-10);
-        assert!((expectations[&"z"] - 0.1).abs() < 1e-10);
+        // "y" should have average of (0.9 + 0.8) / 2 = 0.85
+        assert!((expectations[&"y"] - 0.85).abs() < 1e-10);
+        // "x" should have 0.4 / 1 = 0.4
+        assert!((expectations[&"x"] - 0.4).abs() < 1e-10);
+        // "z" should have 0.2 / 1 = 0.2
+        assert!((expectations[&"z"] - 0.2).abs() < 1e-10);
     }
 
     #[test]
