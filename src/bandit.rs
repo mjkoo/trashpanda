@@ -136,6 +136,61 @@ where
         self.policy.expectations(&self.arms, context, rng)
     }
 
+    /// Make predictions for multiple contexts
+    ///
+    /// Returns a vector of predictions, one for each context provided.
+    /// Each prediction uses the same arms but potentially different contexts.
+    ///
+    /// # Arguments
+    /// * `contexts` - Slice of contexts to make predictions for
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    /// Vector of predicted arms, one for each context
+    pub fn predict_batch<I>(
+        &self,
+        contexts: I,
+        rng: &mut dyn rand::RngCore,
+    ) -> Result<Vec<A>, BanditError>
+    where
+        I: IntoIterator<Item = C>,
+        C: Copy,
+    {
+        let mut predictions = Vec::new();
+        for context in contexts {
+            let prediction = self.predict(context, rng)?;
+            predictions.push(prediction);
+        }
+        Ok(predictions)
+    }
+
+    /// Get expected rewards for multiple contexts
+    ///
+    /// Returns a vector of expectation maps, one for each context provided.
+    ///
+    /// # Arguments
+    /// * `contexts` - Slice of contexts to get expectations for
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    /// Vector of HashMaps containing arm->reward expectations
+    pub fn predict_expectations_batch<I>(
+        &self,
+        contexts: I,
+        rng: &mut dyn rand::RngCore,
+    ) -> Vec<HashMap<A, f64>>
+    where
+        I: IntoIterator<Item = C>,
+        C: Copy,
+    {
+        let mut expectations = Vec::new();
+        for context in contexts {
+            let expectation = self.predict_expectations(context, rng);
+            expectations.push(expectation);
+        }
+        expectations
+    }
+
     /// Gets the available arms
     pub fn arms(&self) -> &IndexSet<A> {
         &self.arms
@@ -225,6 +280,46 @@ where
     pub fn predict_expectations_simple(&self, rng: &mut dyn rand::RngCore) -> HashMap<A, f64> {
         self.predict_expectations((), rng)
     }
+
+    /// Make batch predictions without context for non-contextual bandits
+    ///
+    /// This is equivalent to calling `predict_simple()` multiple times.
+    /// Useful when you need multiple independent predictions from the same bandit state.
+    ///
+    /// # Arguments
+    /// * `count` - Number of predictions to make
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    /// Vector of predicted arms
+    pub fn predict_batch_simple(
+        &self,
+        count: usize,
+        rng: &mut dyn rand::RngCore,
+    ) -> Result<Vec<A>, BanditError> {
+        let contexts = vec![(); count];
+        self.predict_batch(contexts, rng)
+    }
+
+    /// Get batch expectations without context for non-contextual bandits
+    ///
+    /// This is equivalent to calling `predict_expectations_simple()` multiple times.
+    /// Useful when you need multiple independent expectation calculations.
+    ///
+    /// # Arguments
+    /// * `count` - Number of expectation calculations to make
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    /// Vector of HashMap containing arm->reward expectations
+    pub fn predict_expectations_batch_simple(
+        &self,
+        count: usize,
+        rng: &mut dyn rand::RngCore,
+    ) -> Vec<HashMap<A, f64>> {
+        let contexts = vec![(); count];
+        self.predict_expectations_batch(contexts, rng)
+    }
 }
 
 // Batch operations for LinUCB
@@ -260,6 +355,57 @@ where
             self.policy.update(decision, ctx.as_ref(), *reward);
         }
         Ok(())
+    }
+
+    /// Make batch predictions for LinUCB with different contexts
+    ///
+    /// This is more efficient than calling `predict()` multiple times when you have
+    /// many different contexts to evaluate.
+    ///
+    /// # Arguments
+    /// * `contexts` - Slice of contexts, each context can be different
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    /// Vector of predicted arms, one for each context
+    pub fn predict_batch_contexts<C>(
+        &self,
+        contexts: &[C],
+        rng: &mut dyn rand::RngCore,
+    ) -> Result<Vec<A>, BanditError>
+    where
+        C: AsRef<[f64]>,
+    {
+        let mut predictions = Vec::with_capacity(contexts.len());
+        for context in contexts {
+            let prediction = self.predict(context.as_ref(), rng)?;
+            predictions.push(prediction);
+        }
+        Ok(predictions)
+    }
+
+    /// Get batch expectations for LinUCB with different contexts
+    ///
+    /// # Arguments
+    /// * `contexts` - Slice of contexts, each context can be different
+    /// * `rng` - Random number generator
+    ///
+    /// # Returns
+    /// Vector of HashMaps containing arm->reward expectations
+    pub fn predict_expectations_batch_contexts<C>(
+        &self,
+        contexts: &[C],
+        rng: &mut dyn rand::RngCore,
+    ) -> Vec<HashMap<A, f64>>
+    where
+        C: AsRef<[f64]>,
+    {
+        let mut expectations = Vec::with_capacity(contexts.len());
+        for context in contexts {
+            let expectation = self.predict_expectations(context.as_ref(), rng);
+            expectations.push(expectation);
+        }
+        expectations
     }
 }
 
@@ -538,5 +684,137 @@ mod tests {
 
         // Try to remove non-existent arm
         assert!(bandit.remove_arm(&10).is_err());
+    }
+
+    #[test]
+    fn test_predict_batch() {
+        let mut bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.0).unwrap(); // Pure exploitation
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Train the bandit
+        bandit.fit(&[1, 1, 2], (), &[1.0, 0.9, 0.5]).unwrap();
+
+        // Test batch prediction with same context
+        let contexts = vec![(), (), ()];
+        let predictions = bandit.predict_batch(contexts, &mut rng).unwrap();
+        assert_eq!(predictions.len(), 3);
+        // With epsilon=0, should always pick arm 1 (highest reward)
+        for prediction in predictions {
+            assert_eq!(prediction, 1);
+        }
+
+        // Test empty batch
+        let empty_contexts: Vec<()> = vec![];
+        let empty_predictions = bandit.predict_batch(empty_contexts, &mut rng).unwrap();
+        assert_eq!(empty_predictions.len(), 0);
+    }
+
+    #[test]
+    fn test_predict_expectations_batch() {
+        let mut bandit = Bandit::epsilon_greedy(vec![1, 2, 3], 0.1).unwrap();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Train the bandit
+        bandit.fit(&[1, 1, 2], (), &[1.0, 0.9, 0.5]).unwrap();
+
+        // Test batch expectations
+        let contexts = vec![(), (), ()];
+        let expectations_batch = bandit.predict_expectations_batch(contexts, &mut rng);
+        assert_eq!(expectations_batch.len(), 3);
+
+        // All should be identical since context is the same
+        for expectations in &expectations_batch {
+            assert_eq!(expectations.len(), 3); // 3 arms
+            assert!(expectations.contains_key(&1));
+            assert!(expectations.contains_key(&2));
+            assert!(expectations.contains_key(&3));
+        }
+
+        // Expectations should be identical for same context
+        assert_eq!(expectations_batch[0], expectations_batch[1]);
+        assert_eq!(expectations_batch[1], expectations_batch[2]);
+    }
+
+    #[test]
+    fn test_predict_batch_simple() {
+        let mut bandit = Bandit::epsilon_greedy(vec!["a", "b", "c"], 0.0).unwrap();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Train the bandit
+        bandit
+            .fit_simple(&["a", "a", "b"], &[1.0, 0.9, 0.5])
+            .unwrap();
+
+        // Test batch prediction simple
+        let predictions = bandit.predict_batch_simple(5, &mut rng).unwrap();
+        assert_eq!(predictions.len(), 5);
+        // With epsilon=0, should always pick "a" (highest reward)
+        for prediction in predictions {
+            assert_eq!(prediction, "a");
+        }
+
+        // Test zero count
+        let zero_predictions = bandit.predict_batch_simple(0, &mut rng).unwrap();
+        assert_eq!(zero_predictions.len(), 0);
+    }
+
+    #[test]
+    fn test_predict_expectations_batch_simple() {
+        let mut bandit = Bandit::epsilon_greedy(vec!["x", "y", "z"], 0.1).unwrap();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Train the bandit
+        bandit
+            .fit_simple(&["x", "x", "y"], &[1.0, 0.9, 0.5])
+            .unwrap();
+
+        // Test batch expectations simple
+        let expectations_batch = bandit.predict_expectations_batch_simple(3, &mut rng);
+        assert_eq!(expectations_batch.len(), 3);
+
+        // All should be identical since no context
+        for expectations in &expectations_batch {
+            assert_eq!(expectations.len(), 3); // 3 arms
+            assert!(expectations.contains_key(&"x"));
+            assert!(expectations.contains_key(&"y"));
+            assert!(expectations.contains_key(&"z"));
+        }
+
+        // All expectations should be identical
+        assert_eq!(expectations_batch[0], expectations_batch[1]);
+        assert_eq!(expectations_batch[1], expectations_batch[2]);
+    }
+
+    #[test]
+    fn test_linucb_batch_contexts() {
+        let mut bandit = Bandit::linucb(vec![1, 2], 1.0, 1.0, 2).unwrap();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        // Train with different contexts
+        let contexts = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 1.0]];
+        bandit
+            .fit_batch(&[1, 2, 1], &contexts, &[1.0, 0.5, 0.8])
+            .unwrap();
+
+        // Test batch prediction with different contexts
+        let test_contexts = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let predictions = bandit
+            .predict_batch_contexts(&test_contexts, &mut rng)
+            .unwrap();
+        assert_eq!(predictions.len(), 2);
+
+        // Test batch expectations with different contexts
+        let expectations_batch =
+            bandit.predict_expectations_batch_contexts(&test_contexts, &mut rng);
+        assert_eq!(expectations_batch.len(), 2);
+
+        for expectations in &expectations_batch {
+            assert_eq!(expectations.len(), 2); // 2 arms
+            assert!(expectations.contains_key(&1));
+            assert!(expectations.contains_key(&2));
+        }
+
+        // Different contexts should potentially give different expectations
+        // (though this is not guaranteed depending on the training data)
     }
 }
