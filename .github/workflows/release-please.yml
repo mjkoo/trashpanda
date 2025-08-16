@@ -29,14 +29,18 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-      - name: Build
+      - name: Install just
         if: ${{ steps.release.outputs.release_created }}
-        run: cargo build --release
-      - name: Run tests
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - name: Install tools
         if: ${{ steps.release.outputs.release_created }}
-        run: cargo test --all-features
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
       - name: Publish to crates.io
         if: ${{ steps.release.outputs.release_created }}
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: just publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
