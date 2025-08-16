@@ -116,7 +116,7 @@ mod tests {
         let mut rng = rand::rngs::StdRng::seed_from_u64(42);
         let expectations = policy.expectations(&arms, (), &mut rng);
         assert_eq!(expectations.len(), 3);
-        for (_arm, expected_reward) in &expectations {
+        for expected_reward in expectations.values() {
             assert_eq!(*expected_reward, 0.0);
         }
 

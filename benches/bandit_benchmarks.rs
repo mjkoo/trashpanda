@@ -115,7 +115,10 @@ fn bench_training(c: &mut Criterion) {
 
             b.iter_batched(
                 || Bandit::new(arms.clone(), EpsilonGreedy::new(0.1)).unwrap(),
-                |mut bandit| black_box(bandit.fit_simple(&decisions, &rewards).unwrap()),
+                |mut bandit| {
+                    bandit.fit_simple(&decisions, &rewards).unwrap();
+                    black_box(())
+                },
                 criterion::BatchSize::SmallInput,
             );
         });
@@ -139,11 +142,10 @@ fn bench_training(c: &mut Criterion) {
                         for i in 0..n_batches {
                             let start = i * batch_size;
                             let end = ((i + 1) * batch_size).min(n);
-                            black_box(
-                                bandit
-                                    .fit_simple(&decisions[start..end], &rewards[start..end])
-                                    .unwrap(),
-                            );
+                            bandit
+                                .fit_simple(&decisions[start..end], &rewards[start..end])
+                                .unwrap();
+                            black_box(());
                         }
                     },
                     criterion::BatchSize::SmallInput,

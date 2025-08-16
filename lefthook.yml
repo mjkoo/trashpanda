@@ -3,4 +3,4 @@ pre-commit:
   commands:
     rust:
       glob: "*.rs"
-      run: cargo fmt --check && cargo clippy -- -D warnings
+      run: cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings

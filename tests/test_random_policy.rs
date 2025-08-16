@@ -10,7 +10,7 @@ fn test_random_policy_basic() {
     // Should be able to predict
     let mut rng = rand::rng();
     let choice = bandit.predict_simple(&mut rng).unwrap();
-    assert!(["a", "b", "c"].contains(&choice.as_ref()));
+    assert!(["a", "b", "c"].contains(&choice));
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn test_random_policy_partial_fit() {
     // Should still work for predictions
     let mut rng = rand::rng();
     let choice = bandit.predict_simple(&mut rng).unwrap();
-    assert!(["x", "y", "z"].contains(&choice.as_ref()));
+    assert!(["x", "y", "z"].contains(&choice));
 }
 
 #[test]
