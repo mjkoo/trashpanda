@@ -11,7 +11,7 @@ categories = ["algorithms", "science"]
 
 [dependencies]
 approx = "0.5"
-indexmap = "2.10.0"
+indexmap = "2.11.0"
 nalgebra = "0.34"
 ordered-float = "5.0"
 rand = "0.9"
