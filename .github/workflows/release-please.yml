@@ -12,7 +12,7 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: googleapis/release-please-action@v4
@@ -22,7 +22,7 @@ jobs:
       # The logic below handles the crates.io publication
       - name: Checkout
         if: ${{ steps.release.outputs.release_created }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Rust
         if: ${{ steps.release.outputs.release_created }}
         uses: actions-rust-lang/setup-rust-toolchain@v1
